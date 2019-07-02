@@ -15,7 +15,7 @@ setup(
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    version='0.0.1',
+    version='0.0.2',
     description='Simulation of rooted phylogenetic trees following an epidemiological model.',
     author='Anna Zhukova',
     author_email='anna.zhukova@pasteur.fr',
@@ -24,7 +24,7 @@ setup(
     install_requires=['ete3', 'pandas', 'numpy', 'scipy'],
     entry_points={
             'console_scripts': [
-                'treesimulator = treesimulator.main:main',
+                'treesimulator = treesimulator.tree_generator:main',
             ]
     },
 )
