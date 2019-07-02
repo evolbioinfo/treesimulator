@@ -1,0 +1,3 @@
+TIME_TILL_NOW = 'T'
+DIST_TO_START = 'D'
+STATE = 'state'
