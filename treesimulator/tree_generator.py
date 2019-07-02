@@ -233,7 +233,7 @@ def subforest(forest, filter, percentile=.5):
     return subforest, num_trees_at_time, time
 
 
-if __name__ == "__main__":
+def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Simulates a tree.")
@@ -250,6 +250,9 @@ if __name__ == "__main__":
                              ' sampling_rate_naive, sampling_rate_treated')
     parser.add_argument('--nwk', type=str, required=True,
                         help='path to the file where to save the simulated tree')
+
+    parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version='0.0.3'))
+
     params = parser.parse_args()
     logging.basicConfig(level=params.log, format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
@@ -265,3 +268,7 @@ if __name__ == "__main__":
                  .format(len(tree) if tree else 0, params.n_tips, params.time))
     if tree:
         tree.write(features=[STATE], outfile=params.nwk)
+
+
+if __name__ == "__main__":
+    main()
