@@ -29,22 +29,59 @@ def describe_error(label, estimated_rates, expected_rates):
     logging.info('Estimated {} are:{}{}'.format(label, separator, np.round(estimated_rates, DIGITS_TO_KEEP)))
 
     if expected_rates is not None:
-        logging.info('Expected {} are:{}{}'.format(label, separator, np.round(expected_rates, DIGITS_TO_KEEP)))
         error_fractions = get_error_fractions(estimated_rates, expected_rates)
-        logging.info('The error fractions are:{}{}'.format(separator, np.round(error_fractions, DIGITS_TO_KEEP)))
         logging.info('The error fractions in percentage:{}{}'
                      .format(separator, np.round(100 * error_fractions)))
         logging.info('\n==========================\n')
 
 
 class Model(object):
-    def __init__(self):
+    def __init__(self, minus_avg_sigma=True):
         super(Model, self).__init__()
-        self._states = self._get_states()
+        self.__states = self._get_states()
+        self.__rates = np.zeros(shape=(4, len(self.states)), dtype=np.float)
+        self.__sigmas = None
+        self.__avg_sigma = None
+        self.__minus_avg = minus_avg_sigma
 
     @property
     def states(self):
-        return self._states
+        return self.__states
+
+    @property
+    def rates(self):
+        """
+        Get rate array with states as columns,
+            and transition, transmission, sampling rates and equilibrium frequencies as rows.
+
+        :return rate array
+        :rtype np.array
+        """
+        return self.__rates
+
+    @property
+    def sigmas(self):
+        """
+        Get rate sum array (minus average sigma if needed).
+
+        :return rate sum array
+        :rtype np.array
+        """
+        if self.__sigmas is None:
+            self.__sigmas = np.sum(self.rates[:-1, :], axis=0)
+            self.__avg_sigma = np.min(self.__sigmas) if self.__minus_avg else 0
+            self.__sigmas -= self.__avg_sigma
+        return self.__sigmas
+
+    @property
+    def avg_sigma(self):
+        """
+        Get average rate sum.
+
+        :return average rate sum
+        :rtype float
+        """
+        return self.__avg_sigma
 
     @abstractmethod
     def num_params(self, type=None):
@@ -55,42 +92,32 @@ class Model(object):
         pass
 
     @abstractmethod
-    def params2rates(self, ps, rates=None, nested_rates=None, sampled_pis=None, **kwargs):
+    def params2rates(self, ps, sampled_pis=None, **kwargs):
         """
-        Convert a list of parameters into sampling, transition and transmission rate dictionaries
-        :param ps: a list of parameter values, in the following order: drm_loss, drm_gain, treatment_elsewhere,
-                  lambda_nr, lambda_ns, lambda_ts, lambda_tr, treatment_first, treatment_second
-        :return: tuple of rate dictionaries: (change_rates, bifurcation_rates, sampling_rates)
+        Converts parameters into a rate array.
         """
         pass
 
-    def get_constraints(self, rates=None, nested_rates=None, sampled_pis=None):
-
-        def check_constraints(ps):
-            rs = self.params2rates(ps, rates, nested_rates, sampled_pis)
-            if np.any(rs < 0):
-                return -1
-            if np.any(rs[3:] > 1):
-                return -1
-            return 1
-
-        return {'type': 'ineq', 'fun': check_constraints},
-
-    def get_bounds(self, lb, ub, nested_rates=None, sampled_pis=None, **kwargs):
+    def get_bounds(self, lb, ub, sampled_pis=None, **kwargs):
         return np.array([[lb, ub]] * self.num_params())
 
-    def _get_sd_formulas(self, rates):
+    def _get_sd_formulas(self):
+        """
+        Given the rates, finds (horizontal) stationary distributions via formulas.
+
+        :return: np.array of stat dist values
+        """
         n = len(self.states)
         return np.repeat(1 / n, n)
 
-    def get_sd(self, rates):
+    def get_sd(self):
         """
         Given the transition rates and transmission rates,
         finds stationary distributions (horizontal).
         :param rates: np.array of rates.
         :return: np.array of stat distribution.
         """
-        return self._get_sd_formulas(rates)
+        return self._get_sd_formulas()
 
     @abstractmethod
     def map_state(self, state):
@@ -103,16 +130,48 @@ class Model(object):
     def get_name(self):
         pass
 
-    def get_nested_model(self):
-        return None
+    def get_sampled_pis(self):
+        return self.rates[-1, :] * self.rates[2, :] / self.rates[-1, :].dot(self.rates[2, :])
 
-    @staticmethod
-    def get_sampled_pis(rates):
-        return rates[-1, :] * rates[2, :] / rates[-1, :].dot(rates[2, :])
+    def get_avg_rates(self):
+        return self.rates[-1, :].dot(self.rates[1:3, :].transpose())
 
-    @staticmethod
-    def get_avg_rates(rates):
-        return rates[-1, :].dot(rates[1:3, :].transpose())
+    def get_expected_sampled_pis(self):
+        return self.rates[2, :] * self.rates[-1, :] / self.rates[-1, :].dot(self.rates[2, :])
+
+    def get_unsampled_p(self, time, root_state=None, **kwargs):
+        """
+        The probability for a tree with a root in a specified state to evolve unsampled over specified time,
+        given the rates.
+
+        :param time: time
+        :type time: float
+        :param root_state: (optional) root state, if None, the root state will be averaged using equilibrium frequencies
+        :type root_state: treesimulator.models.State
+
+        :return: probability for a tree to evolve unsampled over time t
+        :rtype: float
+        """
+        pass
+
+    def get_avg_unsampled_p(self, time_start, time_end, root_state=None, **kwargs):
+        """
+        Calculates the probability for a tree to evolve unsampled, averaged over times between time_end and time_start.
+
+        :param time_start: maximum time
+        :type time_start: float
+        :param time_end: minimum time
+        :type time_end: float
+        :param root_state: (optional) root state, if None, the root state will be averaged using equilibrium frequencies
+        :type root_state: treesimulator.models.State
+        :return: probability for a tree to evolve unsampled, averaged over times between time_end and time_start
+        :rtype: float
+        """
+        if time_end == time_start:
+            return 1
+        return (self.get_unsampled_p(time_start, root_state, **kwargs)
+                + self.get_unsampled_p(time_end, root_state, **kwargs)
+                + 2 * self.get_unsampled_p((time_end + time_start) / 2, root_state, **kwargs)) / 4
 
 
 class State:

@@ -7,29 +7,28 @@ from ete3 import TreeNode
 from treesimulator import DIST_TO_START, TIME_TILL_NOW, STATE
 
 
-def simulate_tree_gillespie(states, rates, max_time, max_sampled=np.inf, root_state=None,
+def simulate_tree_gillespie(model, max_time, max_sampled=np.inf, root_state=None,
                             state_feature=STATE, return_tree=True):
     """
-    Simulates the tree evolution from a root over the given time
-    based on the given sampling, state transition, transmission, death and partner notification rates.
+    Simulates the tree evolution from a root over the given time based on the given model.
+
     :param root_state: root state, if set to None a random state will be chosen according to equilibrium frequencies.
     :param max_sampled: maximal number of sampling node (when reached, the simulation stops)
     :param max_time: float, time over which we generate a tree.
-    :param states: possible states
-    :param rates: numpy.matrix of rates, where columns correspond to model states,
-        and rows correspond to state transitions, transmissions, sampling and equilibrium frequencies.
+    :param model: treesimulator.models.Model
     :return: the simulated tree (ete3.Tree).
     """
     if root_state is None:
-        root_state = np.random.choice(states, size=1, p=rates[-1, :])[0]
+        root_state = np.random.choice(model.states, size=1, p=model.rates[-1, :])[0]
 
     # evolve till the time is up, following Gillespie
     time = 0
-    infectious_nums = np.zeros(len(states), dtype=np.int)
+    num_states = len(model.states)
+    infectious_nums = np.zeros(num_states, dtype=np.int)
     infectious_nums[root_state.index] = 1
-    sampled_nums = np.zeros(len(states), dtype=np.int)
+    sampled_nums = np.zeros(num_states, dtype=np.int)
 
-    infectious_state2id = [set() for _ in states]
+    infectious_state2id = [set() for _ in model.states]
     cur_id = 0, 0
     infectious_state2id[root_state.index].add(cur_id)
     id2time = {}
@@ -38,7 +37,7 @@ def simulate_tree_gillespie(states, rates, max_time, max_sampled=np.inf, root_st
 
     while infectious_nums.sum() and sampled_nums.sum() < max_sampled and time < max_time:
         # first we need to calculate rate sum
-        rate_sums = rates[:-1, :].dot(infectious_nums)
+        rate_sums = model.rates[:-1, :].dot(infectious_nums)
         total_rate = rate_sums.sum()
 
         # now let us see when next event takes place
@@ -53,10 +52,10 @@ def simulate_tree_gillespie(states, rates, max_time, max_sampled=np.inf, root_st
 
         # case 1: state transition
         if random_event < rate_sums[0]:
-            transition_rates = rates[0, :] * infectious_nums
-            for i in range(len(states)):
+            transition_rates = model.rates[0, :] * infectious_nums
+            for i in range(num_states):
                 if random_event < transition_rates[i]:
-                    state = states[i]
+                    state = model.states[i]
                     infectious_nums[state.index] -= 1
                     infectious_nums[state.next_state.index] += 1
 
@@ -68,10 +67,10 @@ def simulate_tree_gillespie(states, rates, max_time, max_sampled=np.inf, root_st
 
         # case 2: transmission
         if random_event < rate_sums[1]:
-            transmission_rates = rates[1, :] * infectious_nums
-            for i in range(len(states)):
+            transmission_rates = model.rates[1, :] * infectious_nums
+            for i in range(num_states):
                 if random_event < transmission_rates[i]:
-                    state = states[i]
+                    state = model.states[i]
                     infectious_nums[state.recipient.index] += 1
 
                     cur_id = cur_id[0] + 1, 0
@@ -88,10 +87,10 @@ def simulate_tree_gillespie(states, rates, max_time, max_sampled=np.inf, root_st
         random_event -= rate_sums[1]
 
         # case 3: sampling
-        sampling_rates = rates[2, :] * infectious_nums
-        for i in range(len(states)):
+        sampling_rates = model.rates[2, :] * infectious_nums
+        for i in range(num_states):
             if random_event < sampling_rates[i]:
-                state = states[i]
+                state = model.states[i]
                 infectious_nums[state.index] -= 1
                 sampled_nums[state.index] += 1
 
@@ -160,13 +159,13 @@ def random_pop(elements):
     return element
 
 
-def generate_forest(states, rates, max_time, min_tips=1_000, keep_nones=False, state_feature=STATE):
+def generate_forest(model, max_time, min_tips=1_000, keep_nones=False, state_feature=STATE):
     total_n_tips = 0
     forest = []
     total_trees = 0
     sampled_trees = 0
     while total_n_tips < min_tips:
-        tree = simulate_tree_gillespie(states, rates, max_time=max_time, state_feature=state_feature)
+        tree = simulate_tree_gillespie(model, max_time=max_time, state_feature=state_feature)
         total_trees += 1
         if tree:
             total_n_tips += len(tree)

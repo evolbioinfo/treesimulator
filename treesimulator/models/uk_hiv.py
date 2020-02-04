@@ -1,7 +1,6 @@
 import numpy as np
 
 from treesimulator.models import Model, SAMPLING, TRANSMISSION, TRANSITION, State
-from treesimulator.models.naive_treated import NaiveTreatedModel, avg_rates2nt_rates
 
 TR = 'tr'
 NR = 'nr'
@@ -36,89 +35,31 @@ class UKHivModel(Model):
 
         return np.array([nr_state, ns_state, ts_state, tr_state])
 
-    def params2rates(self, ps, rates=None, nested_rates=None, sampled_pis=None, **kwargs):
+    def params2rates(self, ps, sampled_pis=None, **kwargs):
         """
-        Get rate matrix from the parameter vector.
-        :param ps: np.array([mu_nr, mu_ns, mu_ts, lambda_n, lambda_ts, lambda_tr, psi_n, psi_ts, psi_tr])
-        :param rates: rate matrix 3 x 4 to be updated: rows are mutations, transmissions, sampling, columns are states: nr, ns, ts, tr
-        :param kwargs:
-        :return: rates
+        Converts parameters into a rate array.
+
+        :param ps: parameters, in the following order:
+            reversion, treatment_elsewhere, drm,
+            lambda_nr, lambda_ns, lambda_tr, lambda_ts,
+            treatment_nr, treatment_ns, treatment_ts, treatment_tr
         """
-        update_n_params = nested_rates is None or rates is None or sampled_pis is None
-
-        if rates is None:
-            rates = np.zeros(shape=(4, 4), dtype=np.float)
-
         if sampled_pis is None:
-            rates[0, :] = np.hstack((ps[:3], [0]))
-            rates[1, :] = np.hstack(([ps[3]], ps[3: 6])) if len(ps) <= 9 else ps[3: 7]
-            rates[2, :] = np.hstack(([ps[6]], ps[6:])) if len(ps) <= 9 else ps[7:]
-            rates[3, :] = self.get_sd(rates)
-            return rates
-
-        if nested_rates is None:
-            avg_lambda, avg_psi, lambda_n, psi_n, lambda_tr, psi_tr = ps
-            mu_n, lambda_n, lambda_t, psi_n, psi_t, pi_n, pi_t = avg_rates2nt_rates(avg_lambda, avg_psi, lambda_n,
-                                                                                    psi_n, sampled_pis[:2].sum())
+            self.rates[0, :] = np.hstack((ps[:3], [0]))
+            self.rates[1, :] = np.hstack(([ps[3]], ps[3: 6])) if len(ps) <= 9 else ps[3: 7]
+            self.rates[2, :] = np.hstack(([ps[6]], ps[6:])) if len(ps) <= 9 else ps[7:]
+            self.rates[3, :] = self.get_sd()
         else:
-            lambda_tr, psi_tr = ps
-            lambda_n = nested_rates[1, 0]
-            psi_n = nested_rates[2, 0]
-            pi_n, pi_t = nested_rates[3, :]
-            avg_lambda, avg_psi = nested_rates[3, :].dot(nested_rates[1, :]), nested_rates[3, :].dot(nested_rates[2, :])
-            mu_n = nested_rates[0, 0]
+            # todo: find formulas
+            raise ValueError('Not implemented')
 
-        if update_n_params:
-            rates[1, :2] = [lambda_n, lambda_n]
-            rates[2, :2] = [psi_n, psi_n]
-            rates[3, :2] = sampled_pis[:2] * avg_psi / psi_n
-            rates[0, 1] = pi_n / rates[3, 1] * mu_n
+    def get_bounds(self, lb, ub, sampled_pis=None, **kwargs):
+        return np.array([[lb, ub]] * (9 if sampled_pis is None else 8))
 
-        pi_tr = avg_psi / psi_tr * sampled_pis[3]
-        pi_ts = pi_t - pi_tr
-
-        rates[3, 2:] = [pi_ts, pi_tr]
-        rates[1, 2:] = [(avg_lambda - pi_n * lambda_n - pi_tr * lambda_tr) / pi_ts, lambda_tr]
-        rates[2, 2:] = [(avg_psi - pi_n * psi_n - pi_tr * psi_tr) / pi_ts, psi_tr]
-        rates[0, 0] = -avg_lambda + avg_psi + lambda_n - psi_n + pi_tr / rates[3, 0] * lambda_tr
-        rates[0, 2] = pi_tr / pi_ts * (avg_lambda - avg_psi + psi_tr)
-
-        return rates
-
-    def get_bounds(self, lb, ub, nested_rates=None, sampled_pis=None, **kwargs):
-        """
-        Convert a list of parameters into sampling, transition and transmission rate dictionaries
-        :param ps: a list of parameter values, in the following order: lambda_tr, psi_tr
-        :return: tuple of rate dictionaries: (change_rates, bifurcation_rates, sampling_rates)
-        """
-        if nested_rates is None:
-            return np.array([[lb, ub]] * 6)
-
-        lambda_n = nested_rates[1, 0]
-        pi_n, pi_t = nested_rates[3, :]
-
-        avg_lambda, avg_psi = nested_rates[3, :].dot(nested_rates[1, :]), nested_rates[3, :].dot(nested_rates[2, :])
-        sampled_pi_tr = sampled_pis[3]
-
-        bounds = np.array([[lb, ub]] * 2)
-
-        # psi_tr >= avg_psi * sampled_pi_tr / pi_t
-        bounds[1, 0] = max(bounds[1, 0], avg_psi * sampled_pi_tr / pi_t)
-
-        # lambda_tr <= (avg_lambda - pi_n lambda_n) max(psi_tr) / (avg_psi sampled_pi_tr)
-        bounds[0, 1] = min(bounds[0, 1], (avg_lambda - pi_n * lambda_n) * bounds[1, 1] / (avg_psi * sampled_pi_tr))
-
-        return bounds
-
-    def _get_sd_formulas(self, rates):
-        """
-        Given the transition rates and transmission rates,
-        finds stationary distributions (horizontal) via formulas.
-        :return: np.array of stat dist values
-        """
-        mu_nr, mu_ns, mu_ts, _ = rates[0, :]
-        l_nr, l_ns, l_ts, l_tr = rates[1, :]
-        s_nr, s_ns, s_ts, s_tr = rates[2, :]
+    def _get_sd_formulas(self):
+        mu_nr, mu_ns, mu_ts, _ = self.rates[0, :]
+        l_nr, l_ns, l_ts, l_tr = self.rates[1, :]
+        s_nr, s_ns, s_ts, s_tr = self.rates[2, :]
 
         a = -l_nr + mu_nr + s_nr
         b = -l_ns + mu_ns + s_ns
@@ -164,57 +105,6 @@ class UKHivModel(Model):
 
     def get_name(self):
         return 'uk'
-
-    def get_nested_model(self):
-        return NaiveTreatedModel()
-
-    # def find_rates(self, avg_lambda, avg_psi, sampled_pis):
-    #     # let's assume our x is [pi_nr, pi_ns, pi_ts, pi_ts, mu_..., ..., lambda_..., ..., psi_..., ...]
-    #     pi_nr = Symbol("pi_nr", positive=True)
-    #     pi_ns = Symbol("pi_ns", positive=True)
-    #     pi_ts = Symbol("pi_ts", positive=True)
-    #     pi_tr = Symbol("pi_tr", positive=True)
-    #
-    #     mu_nr = Symbol("mu_nr", positive=True)
-    #     mu_ns = Symbol("mu_ns", positive=True)
-    #     mu_ts = Symbol("mu_ts", positive=True)
-    #
-    #     la_n = Symbol("la_n", positive=True)
-    #     la_ts = Symbol("la_ts", positive=True)
-    #     la_tr = Symbol("la_tr", positive=True)
-    #
-    #     ps_n = Symbol("ps_nr", positive=True)
-    #     ps_ts = Symbol("ps_ts", positive=True)
-    #     ps_tr = Symbol("ps_tr", positive=True)
-    #
-    #     s_pi_nr, s_pi_ns, s_pi_ts, s_pi_tr = sampled_pis
-    #
-    #     avg_diff = avg_lambda - avg_psi
-    #
-    #     equations = [
-    #         pi_nr + pi_ns + pi_ts + pi_tr - 1,
-    #         #
-    #         # pi_nr * ps_nr + pi_ns * ps_ns + pi_ts * ps_ts + pi_tr * ps_tr - avg_psi,
-    #         # pi_nr * la_nr + pi_ns * la_ns + pi_ts * la_ts + pi_tr * la_tr - avg_lambda,
-    #         #
-    #         pi_nr * ps_n - s_pi_nr * avg_psi,
-    #         pi_ns * ps_n - s_pi_ns * avg_psi,
-    #         pi_ts * ps_ts - s_pi_ts * avg_psi,
-    #         pi_tr * ps_tr - s_pi_tr * avg_psi,
-    #         #
-    #         pi_nr * (avg_diff + ps_n + mu_nr - la_n) - pi_tr * la_tr,
-    #         pi_ns * (avg_diff + ps_n + mu_ns - la_n) - pi_nr * mu_nr - pi_ts * la_ts,
-    #         pi_ts * (avg_diff + ps_ts + mu_ts) - pi_ns * mu_ns,
-    #         pi_tr * (avg_diff + ps_tr) - pi_ts * mu_ts,
-    #     ]
-    #
-    #     if self.num_params(SAMPLING) == 1:
-    #         equations += [
-    #             ps_n - ps_ts,
-    #             ps_n - ps_tr
-    #         ]
-    #
-    #     return solve(equations)
 
     @staticmethod
     def get_rates_from_avg_rates(sampled_pis, avg_lambda, avg_psi, lambda_n, kappa_n,
