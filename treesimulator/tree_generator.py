@@ -92,11 +92,14 @@ def simulate_tree_gillespie(model, max_time, max_sampled=np.inf, root_state=None
             if random_event < sampling_rates[i]:
                 state = model.states[i]
                 infectious_nums[state.index] -= 1
-                sampled_nums[state.index] += 1
 
                 sampled_id = random_pop(infectious_state2id[state.index])
                 id2time[sampled_id] = time
-                sampled_id2state[sampled_id] = state
+
+                if np.random.uniform(0, 1, 1)[0] < model.ps[state.index]:
+                    sampled_id2state[sampled_id] = state
+                    sampled_nums[state.index] += 1
+
                 break
             random_event -= sampling_rates[i]
 
@@ -144,7 +147,7 @@ def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_featu
                 child.up = None
     # annotate time till now
     for node in root.traverse('postorder'):
-        node.add_feature(TIME_TILL_NOW, max_time - getattr(node, DIST_TO_START) + node.dist / 2)
+        node.add_feature(TIME_TILL_NOW, max_time - getattr(node, DIST_TO_START))
     return root
 
 

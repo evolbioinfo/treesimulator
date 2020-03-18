@@ -36,13 +36,18 @@ def describe_error(label, estimated_rates, expected_rates):
 
 
 class Model(object):
-    def __init__(self, minus_avg_sigma=True):
+    def __init__(self, minus_avg_sigma=True, ps=None, *args, **kwargs):
         super(Model, self).__init__()
         self.__states = self._get_states()
+        self.__ps = np.array(ps) if ps is not None else np.ones(len(self.states), dtype=float)
         self.__rates = np.zeros(shape=(4, len(self.states)), dtype=np.float)
         self.__sigmas = None
         self.__avg_sigma = None
         self.__minus_avg = minus_avg_sigma
+
+    @property
+    def ps(self):
+        return self.__ps
 
     @property
     def states(self):
