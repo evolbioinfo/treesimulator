@@ -5,6 +5,10 @@ import numpy as np
 from likelihood.convolution import get_convolution
 from treesimulator.models import Model, SAMPLING, TRANSMISSION, TRANSITION, State
 
+M = 5
+# 0.1%
+FRACTION_OF_SIGNIFICANT_ADDITION = 0.01
+
 EXPOSED = 'e'
 INFECTED = 'i'
 
@@ -16,12 +20,17 @@ class BirthDeathExposedModel(Model):
 
     def num_params(self, type=None):
         if SAMPLING == type:
-            return 2
+            return 1
         if TRANSMISSION == type:
             return 1
         if TRANSITION == type:
             return 1
-        return 4
+        return 3
+
+    def clone(self):
+        model = BirthDeathExposedModel(p=self.ps[1])
+        model.params2rates([self.rates[0, 0], self.rates[1, 1], self.rates[2, 1]])
+        return model
 
     def _get_states(self):
         infected_state = State(name=INFECTED, index=1)
@@ -41,10 +50,10 @@ class BirthDeathExposedModel(Model):
         :param ps: parameters, in the following order:
             transition E->I, transmission from I to E, sampling of I
         """
-        mu, lambda_i, psi_e, psi_i = ps
+        mu, lambda_i, psi_i = ps
         self.rates[0, 0] = mu
         self.rates[1, 1] = lambda_i
-        self.rates[2, :] = psi_e, psi_i
+        self.rates[2, 1] = psi_i
         self.rates[3, :] = self.get_sd()
 
     def get_bounds(self, lb, ub, **kwargs):
@@ -52,12 +61,11 @@ class BirthDeathExposedModel(Model):
 
     def _get_sd_formulas(self):
         mu = self.rates[0, 0]
-        lambda_i = self.rates[1, 1]
-        psi_e, psi_i = self.rates[2, :]
+        lambda_i, psi_i = self.rates[1: -1, 1]
 
         p = [
-            lambda_i - psi_i + psi_e,
-            psi_i - psi_e + mu,
+            lambda_i - psi_i,
+            psi_i + mu,
             -mu
         ]
         roots = np.roots(p)
@@ -77,6 +85,26 @@ class BirthDeathExposedModel(Model):
     def get_name(self):
         return 'BDE'
 
+    def get_avg_unsampled_p(self, time_start, time_end, root_state=None, m=M, **kwargs):
+        """
+        Calculates the probability for a tree to evolve unsampled, averaged over times between time_end and time_start.
+
+        :param time_start: maximum time
+        :type time_start: float
+        :param time_end: minimum time
+        :type time_end: float
+        :param root_state: (optional) root state, if None, the root state will be averaged using equilibrium frequencies
+        :type root_state: treesimulator.models.State
+        :return: probability for a tree to evolve unsampled, averaged over times between time_end and time_start
+        :rtype: float
+        """
+        if time_end == time_start:
+            return 1
+
+        time = time_end - time_start
+        times = [time_start + (i + 1 / 2) * time / (m + 1) for i in range(0, m + 1)]
+        return sum(self.get_unsampled_p(t, root_state, **kwargs) for t in times) / len(times)
+
     def get_unsampled_p(self, time, root_state=None, **kwargs):
         """
         The probability for a tree with a root in a specified state to evolve unsampled over specified time,
@@ -91,44 +119,109 @@ class BirthDeathExposedModel(Model):
         :rtype: float
         """
 
-        c = 1 / 2
-        for _ in range(2):
-             c = self.__get_unsampled_p_const(time / 2, self.states[0], c=c)
-
+        def get_iterative_c(t):
+            p = max(4, int(np.log2(16 * max(1, t * max([self.rates[0, 0], self.rates[1, 1], self.rates[2, 1]])))))
+            c = 1
+            tau = t / (2 << (p - 1))
+            while tau < t:
+                c = self.__get_unsampled_p_const(tau, self.states[0], c=c)
+                tau *= 2
+            return c
+        c = get_iterative_c(time)
         return self.__get_unsampled_p_const(time, root_state, c=c)
 
-    def get_prob(self, time, T, start_state, end_state, **kwargs):
-        if EXPOSED == end_state.name:
-            return 0
+    def get_prob(self, time, T, start_state, bother=True, **kwargs):
+        n = max(1, int(time * 4 * max([self.rates[0, 0], self.rates[1, 1], self.rates[2, 1]])))
+        if bother and n > 1:
+            t = time / n
+            ttn = T + time - t
+            return sum(self._get_prob(t, ttn, start_state, state) * self.get_prob(time - t, T, state)
+                       for state in self.states)
+        else:
+            return self._get_prob(time, T, start_state, self.states[1])
 
-        m = self.rates[0, 0]
+    def _get_prob(self, time, T, start_state, end_state, **kwargs):
+        mu = self.rates[0, 0]
         lambda_i = self.rates[1, 1]
-        sigma_e, sigma_i = self.sigmas
+        s_i = self.rates[2, 1]
 
         avg_u_i = self.get_avg_unsampled_p(time + T, T, self.states[1])
         avg_u_e = self.get_avg_unsampled_p(time + T, T, self.states[0])
-        if INFECTED == start_state.name:
-            same_patient_p = np.exp(-(sigma_i - lambda_i * avg_u_i) * time)
-            res = same_patient_p
-            paths = [[1, 0, 1], [1, 1, 0, 1], [1, 0, 1, 1], [1, 1, 0, 1, 1], [1, 0, 1, 1, 1], [1, 0, 1, 0, 1], [1, 0, 1, 0, 1], [1, 1, 1, 0, 1]]
-            for path in paths:
-                p = get_convolution(time, np.around(self.sigmas[path], 5))
-                p *= np.power(m, sum(1 for _ in path if _ == 0))
-                p *= np.power(avg_u_i, sum(1 for i in range(len(path) - 1) if path[i] == 1 and path[i + 1] == 0))
-                p *= np.power(avg_u_e, sum(1 for i in range(len(path) - 1) if path[i] == 1 and path[i + 1] == 1))
-                res += p
-        else:
-            transition_then_same_patient_p = m * np.exp(-(sigma_i - lambda_i * avg_u_i) * time) \
-                                             * (np.exp(-(sigma_e - sigma_i + lambda_i * avg_u_i) * time) - 1) \
-                                             / (sigma_i - sigma_e - lambda_i * avg_u_i)
-            res = transition_then_same_patient_p
-            paths = [[0, 1, 0, 1], [0, 1, 0, 1, 1], [0, 1, 1, 0, 1]]
-            for path in paths:
-                p = get_convolution(time, np.around(self.sigmas[path], 5))
-                p *= np.power(m, sum(1 for _ in path if _ == 0))
-                p *= np.power(avg_u_i, sum(1 for i in range(len(path) - 1) if path[i] == 1 and path[i + 1] == 0))
-                p *= np.power(avg_u_e, sum(1 for i in range(len(path) - 1) if path[i] == 1 and path[i + 1] == 1))
-                res += p
+
+        # def get_sigma(avg_u_e):
+        #     return lambda_i + s_i - lambda_i * avg_u_e
+        #
+        # mu_la_la = mu * lambda_i * lambda_i
+        #
+        # def get_avg_us(m):
+        #     times = [i * time / m for i in range(1, m + 1)]
+        #     return [(self.get_avg_unsampled_p((time - t - time / m) + T, (time - t) + T, self.states[0]),
+        #              self.get_avg_unsampled_p((time - t - time / m) + T, (time - t) + T, self.states[1]))
+        #             for t in times]
+
+        sigma = lambda_i + s_i - lambda_i * avg_u_e
+        coeff = mu * lambda_i * lambda_i * avg_u_i * avg_u_e
+
+        if INFECTED == start_state.name and INFECTED == end_state.name:
+            sigmas = [sigma]
+            multiplier = 1
+            res = np.exp(-sigma * time)
+            i = 0
+            while True:
+                i += 1
+                multiplier *= coeff
+                sigmas.extend([sigma, mu])
+                addition = multiplier * get_convolution(time, sigmas)
+                res += addition
+                if addition <= 0 or addition < res * FRACTION_OF_SIGNIFICANT_ADDITION:
+                    if i > 15:
+                        print('I->I: after {} iterations: from {} to {}\n'.format(i, np.exp(-sigma * time), res))
+                    break
+        elif INFECTED == start_state.name and EXPOSED == end_state.name:
+            sigmas = [mu, sigma]
+            multiplier = lambda_i * avg_u_i
+            res = 0
+            i = 0
+            while True:
+                i += 1
+                addition = multiplier * get_convolution(time, sigmas)
+                res += addition
+                if addition <= 0 or addition < res * FRACTION_OF_SIGNIFICANT_ADDITION:
+                    if i > 15:
+                        print('I->E: after {} iterations: {}\n'.format(i, res))
+                    break
+                multiplier *= coeff
+                sigmas.extend([sigma, mu])
+        elif EXPOSED == start_state.name and INFECTED == end_state.name:
+            sigmas = [sigma, mu]
+            multiplier = mu
+            res = 0
+            i = 0
+            while True:
+                i += 1
+                addition = multiplier * get_convolution(time, sigmas)
+                res += addition
+                if addition <= 0 or addition < res * FRACTION_OF_SIGNIFICANT_ADDITION:
+                    if i > 15:
+                        print('E->I: after {} iterations: {}\n'.format(i, res))
+                    break
+                multiplier *= coeff
+                sigmas.extend([sigma, mu])
+        elif EXPOSED == start_state.name and EXPOSED == end_state.name:
+            res = np.exp(-mu * time)
+            multiplier = mu * lambda_i * avg_u_i
+            sigmas = [mu, mu]
+            i = 0
+            while True:
+                i += 1
+                addition = multiplier * get_convolution(time, sigmas)
+                res += addition
+                if addition <= 0 or addition < res * FRACTION_OF_SIGNIFICANT_ADDITION:
+                    if i > 15:
+                        print('E->E: after {} iterations: from {} to {}\n'.format(i, np.exp(-mu * time), res))
+                    break
+                multiplier *= coeff
+                sigmas.extend([sigma, mu])
         return res
 
     def get_tree_log_likelihood(self, tree, root_state=None):
@@ -138,10 +231,9 @@ class BirthDeathExposedModel(Model):
         :param root_state: state of the root, if known
         :param tree: the tree of interest (ete3 Tree)
         """
-        STATE_PS = 'state_ps'
+        STATE_PS = 'state_ps_{}'.format(self.__hash__())
 
-        lambda_i = self.rates[1, 1]
-        psi_e, psi_i = self.rates[1, :]
+        lambda_i, psi_i = self.rates[1:-1, 1]
         p = self.ps[1]
 
         res = len(tree) * (np.log(psi_i) + np.log(p)) + (len(tree) - 1) * np.log(lambda_i)
@@ -158,8 +250,7 @@ class BirthDeathExposedModel(Model):
                 # probabilities of evolving the left branch from each state
                 left_ps, right_ps = getattr(left, STATE_PS), getattr(right, STATE_PS)
                 res += np.log(left_ps.dot(right_ps[[1, 0]]))
-            p_values = np.array([self.get_prob(time=node.dist, T=getattr(node, 'T'),
-                                               start_state=state, end_state=self.states[1])
+            p_values = np.array([self.get_prob(time=node.dist, T=getattr(node, 'T'), start_state=state)
                                  for state in self.states])
             # if we got an overflow somewhere, and therefore a negative probability, let's reset it to zero
             if np.any(p_values < 0):
@@ -183,16 +274,16 @@ class BirthDeathExposedModel(Model):
 
     def __get_unsampled_p_const(self, time, root_state=None, c=0, **kwargs):
         """
-        The differential equations are the following (mu == m; lambda_i == l, psi_e == s1, psi_i == s2):
-        (1) x'(t) = -(m + s1) x(t) + m y(t) + s1
-        (2) y'(t) = -(l + s2) y(t) + s2 (1 - p) + l x(t) y(t)
+        The differential equations are the following (mu == m; lambda_i == l, psi_i == s):
+        (1) x'(t) = -m x(t) + m y(t)
+        (2) y'(t) = -(l + s) y(t) + s (1 - p) + l x(t) y(t)
         with the initial condition: x(0) = y(0) = 1,
         where x(t) = U_e(t), y(t) = U_i(t).
 
         Replacing x(t) in (2) with a constant 0 <= c <= 1, we can obtain the following solution (Mathematica):
 
-        x(t) = (e^(t (-(-c l + l + s2))) (c^2 l^2 m e^(t (-c l + l + s2) + t (-m - s1)) + c^2 l^2 s1 e^(t (-c l + l + s2)) - 2 c l^2 m e^(t (-c l + l + s2) + t (-m - s1)) + l^2 m e^(t (-c l + l + s2) + t (-m - s1)) - 2 c l^2 s1 e^(t (-c l + l + s2)) + l^2 s1 e^(t (-c l + l + s2)) + m^2 p s2 e^(t (-c l + l + s2)) - m^2 s2 e^(t (-c l + l + s2)) + c l m^2 + m p s2^2 e^(t (-c l + l + s2) + t (-m - s1)) - c l m p s2 e^(t (-c l + l + s2) + t (-m - s1)) + l m p s2 e^(t (-c l + l + s2) + t (-m - s1)) + m p s1 s2 e^(t (-c l + l + s2)) - m p s2^2 e^(t (-c l + l + s2)) + c l m p s2 e^(t (-c l + l + s2)) - l m p s2 e^(t (-c l + l + s2)) + c l m s1 e^(t (-c l + l + s2)) - l m s1 e^(t (-c l + l + s2)) - c l m s2 e^(t (-c l + l + s2) + t (-m - s1)) + l m s2 e^(t (-c l + l + s2) + t (-m - s1)) - 2 m s1 s2 e^(t (-c l + l + s2)) + c l m s1 + m s2^2 e^(t (-c l + l + s2)) - c l m s2 e^(t (-c l + l + s2)) + l m s2 e^(t (-c l + l + s2)) + c l s1^2 e^(t (-c l + l + s2)) - l s1^2 e^(t (-c l + l + s2)) - s1^2 s2 e^(t (-c l + l + s2)) + s1 s2^2 e^(t (-c l + l + s2)) - 2 c l s1 s2 e^(t (-c l + l + s2)) + 2 l s1 s2 e^(t (-c l + l + s2)) - l m^2 - l m s1 - m^2 p s2 - m p s1 s2))/((m + s1) (c l - l - s2) (c l - l + m + s1 - s2))
-        y(t) = (e^(t (-(-c l + l + s2))) (p s2 e^(t (-c l + l + s2)) - s2 e^(t (-c l + l + s2)) + c l - l - p s2))/(c l - l - s2)
+        x(t) = (exp(-t ((c - 1) l + m - s) - t (-c l + l + s) - m t) (c^2 l^2 exp(t ((c - 1) l + m - s) + t (-c l + l + s)) - 2 c l^2 exp(t ((c - 1) l + m - s) + t (-c l + l + s)) + l^2 exp(t ((c - 1) l + m - s) + t (-c l + l + s)) + p s^2 exp(t ((c - 1) l + m - s) + t (-c l + l + s)) - p s^2 exp(t ((c - 1) l + m - s) + t (-c l + l + s) + m t) - c l p s exp(t ((c - 1) l + m - s) + t (-c l + l + s)) + l p s exp(t ((c - 1) l + m - s) + t (-c l + l + s)) + c l p s exp(t ((c - 1) l + m - s) + t (-c l + l + s) + m t) - l p s exp(t ((c - 1) l + m - s) + t (-c l + l + s) + m t) + m p s exp(t ((c - 1) l + m - s) + t (-c l + l + s) + m t) - m p s exp(t ((c - 1) l + m - s) + 2 t (-c l + l + s)) + s^2 exp(t ((c - 1) l + m - s) + t (-c l + l + s) + m t) - c l s exp(t ((c - 1) l + m - s) + t (-c l + l + s)) + l s exp(t ((c - 1) l + m - s) + t (-c l + l + s)) - c l s exp(t ((c - 1) l + m - s) + t (-c l + l + s) + m t) + l s exp(t ((c - 1) l + m - s) + t (-c l + l + s) + m t) - m s exp(t ((c - 1) l + m - s) + t (-c l + l + s) + m t) + m s exp(t ((c - 1) l + m - s) + 2 t (-c l + l + s)) - m p s e^(t ((c - 1) l + m - s) + m t) + m p s e^(t (-c l + l + s) + m t) + c l m e^(t ((c - 1) l + m - s) + m t) - l m e^(t ((c - 1) l + m - s) + m t) - m s e^(t (-c l + l + s) + m t)))/((c l - l - s) (c l - l + m - s))
+        y(t) = (e^(t (-(-c l + l + s))) (p s e^(t (-c l + l + s)) - s e^(t (-c l + l + s)) + c l - l - p s))/(c l - l - s)
 
         :param time:
         :param root_state:
@@ -200,16 +291,21 @@ class BirthDeathExposedModel(Model):
         :return:
         """
         m = self.rates[0, 0]
-        l = self.rates[1, 1]
-        s1, s2 = self.rates[2, :]
+        l, s = self.rates[1: -1, 1]
         p = self.ps[1]
 
         def __U_e(t):
-            return (np.exp(t * (-(-c * l + l + s2))) * (np.power(c, 2) * np.power(l, 2) * m * np.exp(t * (-c * l + l + s2) + t * (-m - s1)) + np.power(c, 2) * np.power(l, 2) * s1 * np.exp(t * (-c * l + l + s2)) - 2 * c * np.power(l, 2) * m * np.exp(t * (-c * l + l + s2) + t * (-m - s1)) + np.power(l, 2) * m * np.exp(t * (-c * l + l + s2) + t * (-m - s1)) - 2 * c * np.power(l, 2) * s1 * np.exp(t * (-c * l + l + s2)) + np.power(l, 2) * s1 * np.exp(t * (-c * l + l + s2)) + np.power(m, 2) * p * s2 * np.exp(t * (-c * l + l + s2)) - np.power(m, 2) * s2 * np.exp(t * (-c * l + l + s2)) + c * l * np.power(m, 2) + m * p * np.power(s2, 2) * np.exp(t * (-c * l + l + s2) + t * (-m - s1)) - c * l * m * p * s2 * np.exp(t * (-c * l + l + s2) + t * (-m - s1)) + l * m * p * s2 * np.exp(t * (-c * l + l + s2) + t * (-m - s1)) + m * p * s1 * s2 * np.exp(t * (-c * l + l + s2)) - m * p * np.power(s2, 2) * np.exp(t * (-c * l + l + s2)) + c * l * m * p * s2 * np.exp(t * (-c * l + l + s2)) - l * m * p * s2 * np.exp(t * (-c * l + l + s2)) + c * l * m * s1 * np.exp(t * (-c * l + l + s2)) - l * m * s1 * np.exp(t * (-c * l + l + s2)) - c * l * m * s2 * np.exp(t * (-c * l + l + s2) + t * (-m - s1)) + l * m * s2 * np.exp(t * (-c * l + l + s2) + t * (-m - s1)) - 2 * m * s1 * s2 * np.exp(t * (-c * l + l + s2)) + c * l * m * s1 + m * np.power(s2, 2) * np.exp(t * (-c * l + l + s2)) - c * l * m * s2 * np.exp(t * (-c * l + l + s2)) + l * m * s2 * np.exp(t * (-c * l + l + s2)) + c * l * np.power(s1, 2) * np.exp(t * (-c * l + l + s2)) - l * np.power(s1, 2) * np.exp(t * (-c * l + l + s2)) - np.power(s1, 2) * s2 * np.exp(t * (-c * l + l + s2)) + s1 * np.power(s2, 2) * np.exp(t * (-c * l + l + s2)) - 2 * c * l * s1 * s2 * np.exp(t * (-c * l + l + s2)) + 2 * l * s1 * s2 * np.exp(t * (-c * l + l + s2)) - l * np.power(m, 2) - l * m * s1 - np.power(m, 2) * p * s2 - m * p * s1 * s2))/((m + s1) * (c * l - l - s2) * (c * l - l + m + s1 - s2))
+            res = (np.exp(-t * ((c - 1) * l + m - s) - t * (-c * l + l + s) - m * t)
+                    * (np.power(c, 2) * np.power(l, 2) * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s)) - 2 * c * np.power(l, 2) * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s)) + np.power(l, 2) * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s)) + p * np.power(s, 2) * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s)) - p * np.power(s, 2) * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s) + m * t) - c * l * p * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s)) + l * p * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s)) + c * l * p * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s) + m * t) - l * p * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s) + m * t) + m * p * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s) + m * t) - m * p * s * np.exp(t * ((c - 1) * l + m - s) + 2 * t * (-c * l + l + s)) + np.power(s, 2) * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s) + m * t) - c * l * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s)) + l * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s)) - c * l * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s) + m * t) + l * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s) + m * t) - m * s * np.exp(t * ((c - 1) * l + m - s) + t * (-c * l + l + s) + m * t) + m * s * np.exp(t * ((c - 1) * l + m - s) + 2 * t * (-c * l + l + s)) - m * p * s * np.exp(t * ((c - 1) * l + m - s) + m * t) + m * p * s * np.exp(t * (-c * l + l + s) + m * t) + c * l * m * np.exp(t * ((c - 1) * l + m - s) + m * t) - l * m * np.exp(t * ((c - 1) * l + m - s) + m * t) - m * s * np.exp(t * (-c * l + l + s) + m * t)))\
+                   / ((c * l - l - s) * (c * l - l + m - s))
+            return min(1, max(0, res))
 
         def __U_i(t):
-            return (np.exp(t * (-(-c * l + l + s2))) * (p * s2 * np.exp(t * (-c * l + l + s2)) - s2 * np.exp(t * (-c * l + l + s2)) + c * l - l - p * s2))/(c * l - l - s2)
-
+            res = (np.exp(t * (-(-c * l + l + s)))
+                    * (p * s * np.exp(t * (-c * l + l + s)) - s * np.exp(t * (-c * l + l + s)) + c * l - l - p * s))\
+                   / (c * l - l - s)
+            return min(1, max(0, res))
+            
         if root_state is None:
             return self.rates[-1, :].dot([__U_e(time), __U_i(time)])
         if EXPOSED == root_state.name:
