@@ -1,13 +1,14 @@
 import logging
 
 import numpy as np
+from scipy.special._ufuncs import gammainc, gamma
 
 from likelihood.convolution import get_convolution
 from treesimulator.models import Model, SAMPLING, TRANSMISSION, TRANSITION, State
 
 M = 5
-# 0.1%
-FRACTION_OF_SIGNIFICANT_ADDITION = 0.01
+# 10%
+FRACTION_OF_SIGNIFICANT_ADDITION = 0.1
 
 EXPOSED = 'e'
 INFECTED = 'i'
@@ -130,98 +131,201 @@ class BirthDeathExposedModel(Model):
         c = get_iterative_c(time)
         return self.__get_unsampled_p_const(time, root_state, c=c)
 
-    def get_prob(self, time, T, start_state, bother=True, **kwargs):
-        n = max(1, int(time * 4 * max([self.rates[0, 0], self.rates[1, 1], self.rates[2, 1]])))
-        if bother and n > 1:
-            t = time / n
-            ttn = T + time - t
-            return sum(self._get_prob(t, ttn, start_state, state) * self.get_prob(time - t, T, state)
-                       for state in self.states)
-        else:
-            return self._get_prob(time, T, start_state, self.states[1])
+    def get_unsampled_p_array(self, time, **kwargs):
+        """
+        The probability for a tree with a root in a specified state to evolve unsampled over specified time,
+        given the rates.
 
-    def _get_prob(self, time, T, start_state, end_state, **kwargs):
+        :param time: time
+        :type time: float
+        :param root_state: (optional) root state, if None, the root state will be averaged using equilibrium frequencies
+        :type root_state: treesimulator.models.State
+
+        :return: probability for a tree to evolve unsampled over time t
+        :rtype: float
+        """
+        ues = [1]
+        uis = [1]
+
+        p = 32
+        tau = time / (2 << (p - 1))
+        times = [0]
+        while tau <= time:
+            times.append(tau)
+            ues.append(self.__get_unsampled_p_const(tau, self.states[0], c=ues[-1]))
+            uis.append(self.__get_unsampled_p_const(tau, self.states[1], c=ues[-2]))
+            tau *= 2
+        return ues, uis, times
+
+    def get_prob(self, time, T, start_state, frac_sign=FRACTION_OF_SIGNIFICANT_ADDITION, max_i=8, gamma=True, **kwargs):
+        # n = max(1, int(time * 2 * max([self.rates[0, 0], self.rates[1, 1], self.rates[2, 1]])))
+        # if bother and n > 1:
+        #     t = time / n
+        #     ttn = T + time - t
+        #     return sum(self._get_prob(t, ttn, start_state, state, frac_sign=frac_sign) * self.get_prob(time - t, T, state)
+        #                for state in self.states)
+        # else:
+        if gamma:
+            return self.__get_prob(time, T, start_state, self.states[1], frac_sign=frac_sign, max_i=max_i)
+        else:
+            return self._get_prob(time, T, start_state, self.states[1], frac_sign=frac_sign, min_i=max_i)
+
+    def __get_prob(self, time, T, start_state, end_state, frac_sign=FRACTION_OF_SIGNIFICANT_ADDITION, max_i=8, **kwargs):
         mu = self.rates[0, 0]
         lambda_i = self.rates[1, 1]
         s_i = self.rates[2, 1]
 
-        avg_u_i = self.get_avg_unsampled_p(time + T, T, self.states[1])
-        avg_u_e = self.get_avg_unsampled_p(time + T, T, self.states[0])
+        def get_avg_u_e_s(m):
+            if m == 0:
+                return []
+            times = (i * time / m for i in range(1, m + 1))
+            return (self.get_unsampled_p((time - t - time / 2 / m) + T, self.states[0]) for t in times)
 
-        # def get_sigma(avg_u_e):
-        #     return lambda_i + s_i - lambda_i * avg_u_e
-        #
-        # mu_la_la = mu * lambda_i * lambda_i
-        #
-        # def get_avg_us(m):
-        #     times = [i * time / m for i in range(1, m + 1)]
-        #     return [(self.get_avg_unsampled_p((time - t - time / m) + T, (time - t) + T, self.states[0]),
-        #              self.get_avg_unsampled_p((time - t - time / m) + T, (time - t) + T, self.states[1]))
-        #             for t in times]
-
-        sigma = lambda_i + s_i - lambda_i * avg_u_e
-        coeff = mu * lambda_i * lambda_i * avg_u_i * avg_u_e
+        def get_avg_u_i_s(m):
+            if m == 0:
+                return []
+            times = (i * time / m for i in range(1, m + 1))
+            return (self.get_unsampled_p((time - t - time / 2 / m) + T, self.states[1]) for t in times)
 
         if INFECTED == start_state.name and INFECTED == end_state.name:
-            sigmas = [sigma]
             multiplier = 1
-            res = np.exp(-sigma * time)
-            i = 0
+            res = np.exp(-(lambda_i + s_i - lambda_i * next(get_avg_u_e_s(1))) * time)
+            i = 1
             while True:
-                i += 1
-                multiplier *= coeff
-                sigmas.extend([sigma, mu])
-                addition = multiplier * get_convolution(time, sigmas)
-                res += addition
-                if addition <= 0 or addition < res * FRACTION_OF_SIGNIFICANT_ADDITION:
-                    if i > 15:
-                        print('I->I: after {} iterations: from {} to {}\n'.format(i, np.exp(-sigma * time), res))
+                multiplier *= mu * lambda_i
+
+                u_es = np.array(list(get_avg_u_e_s(i + 1)))
+                sigmas = lambda_i + s_i - lambda_i * u_es
+                divisors = mu - lambda_i - s_i + lambda_i * u_es
+                exps = np.exp(-sigmas * time)
+                lambda_u_es = lambda_i * u_es
+                prods = np.ones(i + 1)
+                for k in range(i + 1):
+                    p = lambda_u_es[k] - lambda_u_es
+                    p[k] = 1
+                    prods[k] = np.prod(p)
+                gammas = gammainc(i, divisors * time)
+                conv = gamma(i) * np.sum(exps * gammas / prods / np.power(divisors, i))
+
+                addition = max(0, multiplier * prod(get_avg_u_e_s(i)) * prod(get_avg_u_i_s(i)) * conv)
+                if addition > 1:
                     break
-        elif INFECTED == start_state.name and EXPOSED == end_state.name:
-            sigmas = [mu, sigma]
-            multiplier = lambda_i * avg_u_i
-            res = 0
-            i = 0
-            while True:
-                i += 1
-                addition = multiplier * get_convolution(time, sigmas)
                 res += addition
-                if addition <= 0 or addition < res * FRACTION_OF_SIGNIFICANT_ADDITION:
-                    if i > 15:
-                        print('I->E: after {} iterations: {}\n'.format(i, res))
+                i += 1
+                multiplier /= i
+                if addition < res * frac_sign or max_i < i:
                     break
-                multiplier *= coeff
-                sigmas.extend([sigma, mu])
         elif EXPOSED == start_state.name and INFECTED == end_state.name:
-            sigmas = [sigma, mu]
             multiplier = mu
             res = 0
             i = 0
             while True:
-                i += 1
-                addition = multiplier * get_convolution(time, sigmas)
-                res += addition
-                if addition <= 0 or addition < res * FRACTION_OF_SIGNIFICANT_ADDITION:
-                    if i > 15:
-                        print('E->I: after {} iterations: {}\n'.format(i, res))
+                u_es = np.array(list(get_avg_u_e_s(i + 1)))
+                sigmas = lambda_i + s_i - lambda_i * u_es
+                divisors = mu - lambda_i - s_i + lambda_i * u_es
+                exps = np.exp(-sigmas * time)
+                lambda_u_es = lambda_i * u_es
+                prods = np.ones(i + 1)
+                for k in range(i + 1):
+                    p = lambda_u_es[k] - lambda_u_es
+                    p[k] = 1
+                    prods[k] = np.prod(p)
+                gammas = gammainc(i + 1, divisors * time)
+                conv = gamma(i + 1) * np.sum(exps * gammas / prods / np.power(divisors, i + 1))
+
+                addition = max(0, multiplier * prod(get_avg_u_e_s(i)) * prod(get_avg_u_i_s(i)) * conv)
+                if addition > 1:
                     break
-                multiplier *= coeff
-                sigmas.extend([sigma, mu])
-        elif EXPOSED == start_state.name and EXPOSED == end_state.name:
-            res = np.exp(-mu * time)
-            multiplier = mu * lambda_i * avg_u_i
-            sigmas = [mu, mu]
+                res += addition
+                i += 1
+                multiplier *= mu * lambda_i / i
+                if addition < res * frac_sign or max_i < i:
+                    break
+        return res
+
+    def _get_prob(self, time, T, start_state, end_state, frac_sign=FRACTION_OF_SIGNIFICANT_ADDITION, min_i=1, **kwargs):
+        mu = self.rates[0, 0]
+        lambda_i = self.rates[1, 1]
+        s_i = self.rates[2, 1]
+
+        def get_sigma(avg_u_e):
+            return lambda_i + s_i - lambda_i * avg_u_e
+
+        mu_la_la = mu * lambda_i * lambda_i
+
+        def get_avg_u_e_s(m):
+            if m == 0:
+                return []
+            times = (i * time / m for i in range(1, m + 1))
+            return (self.get_unsampled_p((time - t - time / 2 / m) + T, self.states[0]) for t in times)
+
+        def get_avg_u_i_s(m):
+            if m == 0:
+                return []
+            times = (i * time / m for i in range(1, m + 1))
+            return (self.get_unsampled_p((time - t - time / 2 / m) + T, self.states[1]) for t in times)
+
+        if INFECTED == start_state.name and INFECTED == end_state.name:
+            multiplier = 1
+            res = 0
             i = 0
             while True:
-                i += 1
-                addition = multiplier * get_convolution(time, sigmas)
-                res += addition
-                if addition <= 0 or addition < res * FRACTION_OF_SIGNIFICANT_ADDITION:
-                    if i > 15:
-                        print('E->E: after {} iterations: from {} to {}\n'.format(i, np.exp(-mu * time), res))
+                sigmas = [get_sigma(u_e) for u_e in get_avg_u_e_s(i + 1)] + [mu] * i
+                addition = max(0, multiplier * prod(get_avg_u_e_s(i)) * prod(get_avg_u_i_s(i)) \
+                           * get_convolution(time, sigmas))
+                if addition > 1:
                     break
-                multiplier *= coeff
-                sigmas.extend([sigma, mu])
+                res += addition
+                i += 1
+                multiplier *= mu_la_la
+                if addition < res * frac_sign or min_i < i:
+                    break
+        elif INFECTED == start_state.name and EXPOSED == end_state.name:
+            multiplier = lambda_i
+            res = 0
+            i = 0
+            while True:
+                sigmas = [get_sigma(u_e) for u_e in get_avg_u_e_s(i + 1)] + [mu] * (i + 1)
+                addition = max(0, multiplier * prod(get_avg_u_e_s(i)) * prod(get_avg_u_i_s(i + 1)) \
+                           * get_convolution(time, sigmas))
+                if addition > 1:
+                    break
+                res += addition
+                i += 1
+                multiplier *= mu_la_la
+                if addition < res * frac_sign or min_i < i:
+                    break
+        elif EXPOSED == start_state.name and INFECTED == end_state.name:
+            multiplier = mu
+            res = 0
+            i = 0
+            while True:
+                sigmas = [get_sigma(u_e) for u_e in get_avg_u_e_s(i + 1)] + [mu] * (i + 1)
+                addition = max(0, multiplier * prod(get_avg_u_e_s(i)) * prod(get_avg_u_i_s(i)) \
+                           * get_convolution(time, sigmas))
+                if addition > 1:
+                    break
+                res += addition
+                i += 1
+                multiplier *= mu_la_la
+                if addition < res * frac_sign or min_i < i:
+                    break
+        elif EXPOSED == start_state.name and EXPOSED == end_state.name:
+            res = np.exp(-mu * time)
+
+            multiplier = mu * lambda_i
+            i = 1
+            while True:
+                sigmas = [get_sigma(u_e) for u_e in get_avg_u_e_s(i - 1)] + [mu] * (i + 1)
+                addition = max(0, multiplier * prod(get_avg_u_e_s(i - 1)) * prod(get_avg_u_i_s(i)) \
+                           * get_convolution(time, sigmas))
+                if addition > 1:
+                    break
+                res += addition
+                i += 1
+                multiplier *= mu_la_la
+                if addition < res * frac_sign or min_i < i:
+                    break
         return res
 
     def get_tree_log_likelihood(self, tree, root_state=None):
@@ -313,3 +417,10 @@ class BirthDeathExposedModel(Model):
         if INFECTED == root_state.name:
             return __U_i(time)
         raise ValueError('Unknown root state {}'.format(root_state.name))
+
+
+def prod(values):
+    res = 1
+    for v in values:
+        res *= v
+    return res
