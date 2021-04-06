@@ -179,6 +179,7 @@ class Model(object):
                 + 2 * self.get_unsampled_p((time_end + time_start) / 2, root_state, **kwargs)) / 4
 
 
+
 class State:
     def __init__(self, name, index, next_state=None, recipient=None):
         self._name = name
