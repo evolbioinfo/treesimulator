@@ -7,7 +7,7 @@ from ete3 import TreeNode
 from treesimulator import DIST_TO_START, TIME_TILL_NOW, STATE
 
 
-def simulate_tree_gillespie(model, max_time, max_sampled=np.inf, root_state=None,
+def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf, root_state=None,
                             state_feature=STATE, return_tree=True, report_times=None):
     """
     Simulates the tree evolution from a root over the given time based on the given model.
@@ -113,6 +113,8 @@ def simulate_tree_gillespie(model, max_time, max_sampled=np.inf, root_state=None
 
                 break
             random_event -= sampling_rates[i]
+    if max_time == np.inf:
+        max_time = time
 
     if return_tree:
         if time2i:
@@ -176,13 +178,14 @@ def random_pop(elements):
     return element
 
 
-def generate_forest(model, max_time, min_tips=1_000, keep_nones=False, state_feature=STATE, root_state=None):
+def generate_forest(model, max_time=np.inf, min_tips=1_000, max_sampled=np.inf, keep_nones=False, state_feature=STATE, root_state=None):
     total_n_tips = 0
     forest = []
     total_trees = 0
     sampled_trees = 0
     while total_n_tips < min_tips:
-        tree = simulate_tree_gillespie(model, max_time=max_time, state_feature=state_feature, root_state=root_state)
+        tree = simulate_tree_gillespie(model, max_time=max_time, max_sampled=max_sampled,
+                                       state_feature=state_feature, root_state=root_state)
         total_trees += 1
         if tree:
             total_n_tips += len(tree)
