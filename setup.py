@@ -4,6 +4,7 @@ setup(
     name='treesimulator',
     packages=find_packages(),
     long_description=open('README.md').read(),
+    long_description_content_type='text/markdown',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',
