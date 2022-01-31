@@ -21,4 +21,4 @@ def save_log(model, total_tips, T, u, log):
     os.makedirs(os.path.dirname(os.path.abspath(log)), exist_ok=True)
     with open(log, 'w+') as f:
         f.write('{}\n'.format(','.join(res.keys())))
-        f.write('{}\n'.format(','.join(res.values())))
+        f.write('{}\n'.format(','.join(str(_) for _ in res.values())))

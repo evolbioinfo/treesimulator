@@ -17,7 +17,7 @@ class Model(object):
         super(Model, self).__init__()
         self.__states = np.array(states)
         num_states = len(self.states)
-        self.__state_freqs = (1 / num_states) * np.ones(num_states, dtype=float) \
+        self.__state_freqs = ((1 / num_states) * np.ones(num_states, dtype=float)) \
             if state_frequencies is None else np.array(state_frequencies)
         self.__ps = np.array(ps) if ps is not None else np.ones(num_states, dtype=float)
         self.__transmission_rates = np.array(transmission_rates) if transmission_rates is not None \
@@ -117,9 +117,9 @@ class BirthDeathExposedInfectiousModel(Model):
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
         return {'R0': self.transmission_rates[1, 0] / self.removal_rates[1],
-                'infectious_time': 1 / self.removal_rates[1],
-                'incubation_period': 1 / self.transition_rates[0, 1],
-                'sampling_probability': self.ps[1]}
+                'infectious time': 1 / self.removal_rates[1],
+                'incubation period': 1 / self.transition_rates[0, 1],
+                'sampling probability': self.ps[1]}
 
 
 class BirthDeathModel(Model):
@@ -139,8 +139,8 @@ class BirthDeathModel(Model):
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
         return {'R0': self.transmission_rates[0, 0] / self.removal_rates[0],
-                'infectious_time': 1 / self.removal_rates[0],
-                'sampling_probability': self.ps[0]}
+                'infectious time': 1 / self.removal_rates[0],
+                'sampling probability': self.ps[0]}
 
 
 class BirthDeathWithSuperSpreadingModel(Model):
@@ -173,9 +173,8 @@ class BirthDeathWithSuperSpreadingModel(Model):
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
         return {'R0': (self.transmission_rates[0, 0] + self.transition_rates[1, 1]) / self.removal_rates[0],
-                'infectious_time': 1 / self.removal_rates[1],
-                'incubation_period': 1 / self.transition_rates[0],
-                'sampling_probability': self.ps[1],
-                'super-spreading transmission ratio': self.transmission_rates[1, 1] / self.transmission_rates[0, 1],
-                'super-spreading fraction':
+                'infectious time': 1 / self.removal_rates[1],
+                'sampling probability': self.ps[1],
+                'superspreading transmission ratio': self.transmission_rates[1, 1] / self.transmission_rates[0, 1],
+                'superspreading fraction':
                     self.transmission_rates[1, 1] / (self.transmission_rates[1, 1] + self.transmission_rates[1, 0])}

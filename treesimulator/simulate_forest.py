@@ -57,19 +57,22 @@ def main():
     logging.getLogger().handlers = []
     logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
+    n_states = len(params.states)
+    transition_rates = np.array(params.transition_rates).reshape((n_states, n_states))
+    transmission_rates = np.array(params.transmission_rates).reshape((n_states, n_states))
+
     logging.info(
-        'MTBD model parameters are:\n\ttransition_rates=={}\n\ttransmission_rates={}\n\ttransmission_rates={}\n\tps={}'
-            .format(params.transition_rates, params.transmission_rates,
+        'MTBD model parameters are:\n\ttransition_rates=\n{}\n\ttransmission_rates=\n{}\n\ttransmission_rates={}\n\tps={}'
+            .format(transition_rates, transmission_rates,
                     params.removal_rates, params.sampling_probabilities))
     logging.info('Total time T={}'.format(params.T))
 
-    n_states = len(params.states)
     model = Model(states=params.states,
-                  transmission_rates=np.array(params.transmission_rates).reshape((n_states, n_states)),
-                  transition_rates=np.array(params.transition_rates).reshape((n_states, n_states)),
+                  transmission_rates=transition_rates,
+                  transition_rates=transmission_rates,
                   removal_rates=params.removal_rates, ps=params.sampling_probabilities)
 
-    forest, (total_tips, u, T) = generate(model, params.min_tips, params.max_tips, T=params.T, state_frequencies=[1])
+    forest, (total_tips, u, T) = generate(model, params.min_tips, params.max_tips, T=params.T)
 
     save_forest(forest, params.nwk)
     save_log(model, total_tips, T, u, params.log)

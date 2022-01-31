@@ -235,17 +235,21 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None):
             fl = len(forest)
             u = total_trees - fl
             total_tips = sum(len(list(t.iter_leaves())) for t in forest)
-            logging.info('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time {}.'
-                         .format(fl, u, total_tips, T))
             if total_tips <= max_tips:
+                logging.info('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time {}.'
+                             .format(fl, u, total_tips, T))
                 return forest, (total_tips, u, T)
+            logging.debug('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time {}.'
+                          .format(fl, u, total_tips, T))
     else:
         while True:
             max_sampled = int(min_tips + np.random.random() * (max_tips + 1 - min_tips))
             tree = simulate_tree_gillespie(model, max_time=np.inf, max_sampled=max_sampled,
                                            state_frequencies=state_frequencies)
             total_tips = len(tree) if tree else 0
-            logging.info('Generated a tree with {} sampled tips over time {}.'
-                         .format(total_tips, getattr(tree, TIME_TILL_NOW) if tree else np.inf))
             if total_tips >= min_tips:
+                logging.info('Generated a tree with {} sampled tips over time {}.'
+                             .format(total_tips, getattr(tree, TIME_TILL_NOW) if tree else np.inf))
                 return [tree], (total_tips, 0, getattr(tree, TIME_TILL_NOW) + tree.dist)
+            logging.debug('Generated a tree with {} sampled tips over time {}.'
+                          .format(total_tips, getattr(tree, TIME_TILL_NOW) if tree else np.inf))
