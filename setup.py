@@ -13,13 +13,13 @@ setup(
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    version='0.1.1',
+    version='0.1.2',
     description='Simulation of rooted phylogenetic trees under a given Multitype Birth–Death model.',
     author='Anna Zhukova',
     author_email='anna.zhukova@pasteur.fr',
     url='https://gitlab.pasteur.fr/phylo/treesimulator',
     keywords=['phylogenetics', 'tree generator', 'multitype birth-death model'],
-    install_requires=['ete3', 'numpy'],
+    install_requires=['six', 'ete3', 'numpy'],
     entry_points={
             'console_scripts': [
                 'generate_bd = treesimulator.simulate_forest_bd:main',
