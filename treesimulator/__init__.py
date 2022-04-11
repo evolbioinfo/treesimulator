@@ -13,6 +13,20 @@ def save_forest(forest, nwk):
             f.write('{}\n'.format(nwk))
 
 
+def save_ltt(real_ltt, observed_ltt, ltt_file):
+    os.makedirs(os.path.dirname(os.path.abspath(ltt_file)), exist_ok=True)
+    with open(ltt_file, 'w+') as f:
+        f.write('time\treal lineages\tobserved lineages\n')
+        observed = 0
+        real = 0
+        for time in sorted(set(real_ltt.keys()) | set(observed_ltt.keys())):
+            if time in observed_ltt:
+                observed = observed_ltt[time]
+            if time in real_ltt:
+                real = real_ltt[time]
+            f.write('{}\t{}\t{}\n'.format(time, real, observed))
+
+
 def save_log(model, total_tips, T, u, log):
     res = model.get_epidemiological_parameters()
     res['tips'] = total_tips

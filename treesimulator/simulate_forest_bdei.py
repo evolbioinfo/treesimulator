@@ -2,8 +2,8 @@ import logging
 
 import numpy as np
 
-from treesimulator import save_forest, save_log
-from treesimulator.generator import generate
+from treesimulator import save_forest, save_log, save_ltt
+from treesimulator.generator import generate, observed_ltt
 from treesimulator.mtbd_models import BirthDeathExposedInfectiousModel
 
 
@@ -38,8 +38,9 @@ def main():
     parser.add_argument('--la', required=True, type=float, help="transmission rate")
     parser.add_argument('--psi', required=True, type=float, help="removal rate")
     parser.add_argument('--p', required=True, type=float, help='sampling probability')
-    parser.add_argument('--log', required=True, default=None, type=str, help="output log file")
-    parser.add_argument('--nwk', required=True, default=None, type=str, help="output tree or forest file")
+    parser.add_argument('--log', required=True, type=str, help="output log file")
+    parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
+    parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
     params = parser.parse_args()
     logging.getLogger().handlers = []
     logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
@@ -50,10 +51,12 @@ def main():
 
     model = BirthDeathExposedInfectiousModel(p=params.p, mu=params.mu, la=params.la, psi=params.psi)
 
-    forest, (total_tips, u, T) = generate(model, params.min_tips, params.max_tips, T=params.T)
+    forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T)
 
     save_forest(forest, params.nwk)
     save_log(model, total_tips, T, u, params.log)
+    if params.ltt:
+        save_ltt(ltt, observed_ltt(forest, T), params.ltt)
 
 
 if '__main__' == __name__:

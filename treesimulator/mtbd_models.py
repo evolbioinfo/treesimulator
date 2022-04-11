@@ -108,8 +108,20 @@ class BirthDeathExposedInfectiousModel(Model):
         las[1, 0] = la
         psis = np.zeros(shape=2, dtype=np.float)
         psis[1] = psi
+
+        mu_plus_psi = mu + psi
+        if la == psi:
+            pi_i = mu / mu_plus_psi
+        else:
+            two_la_minus_psi = 2 * (la - psi)
+            det = np.power(np.power(mu_plus_psi, 2) + 2 * mu * two_la_minus_psi, 1 / 2)
+            pi_i = (det - mu_plus_psi) / two_la_minus_psi
+            if pi_i < 0 or pi_i > 1:
+                pi_i = (-det - mu_plus_psi) / two_la_minus_psi
+
         Model.__init__(self, states=[EXPOSED, INFECTED],
-                       transition_rates=mus, transmission_rates=las, removal_rates=psis, ps=[0, p], *args, **kwargs)
+                       transition_rates=mus, transmission_rates=las, removal_rates=psis, ps=[0, p],
+                       state_frequencies=[1 - pi_i, pi_i], *args, **kwargs)
 
     def get_name(self):
         return 'BDEI'
@@ -155,8 +167,12 @@ class BirthDeathWithSuperSpreadingModel(Model):
         :param p: sampling
         """
         las = np.zeros(shape=(2, 2), dtype=np.float)
-        if la_ss / la_ns != la_sn / la_nn:
-            raise ValueError('transmission ratio constraint is violated: la_ss / la_ns must be equal to la_sn / la_nn')
+        s_ratio = la_ss / la_ns
+        n_ratio = la_sn / la_nn
+        if np.abs(s_ratio - n_ratio) > 1e-3:
+            raise ValueError(
+                'transmission ratio constraint is violated: la_ss / la_ns ({}) must be equal to la_sn / la_nn ({})'
+                    .format(s_ratio, n_ratio))
         las[0, 0] = la_nn
         las[0, 1] = la_ns
         las[1, 0] = la_sn

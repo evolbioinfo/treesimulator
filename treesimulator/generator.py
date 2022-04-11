@@ -1,5 +1,6 @@
 import logging
 import random
+from collections import Counter
 
 import numpy as np
 from ete3 import TreeNode
@@ -8,7 +9,7 @@ from treesimulator import STATE, DIST_TO_START, TIME_TILL_NOW
 
 
 def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
-                            state_feature=STATE, state_frequencies=None):
+                            state_feature=STATE, state_frequencies=None, ltt=False):
     """
     Simulates the tree evolution from a root over the given time based on the given model.
 
@@ -21,6 +22,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
     :type max_time: float
     :param model: MTBD model used to simulate the tree
     :type model: treesimulator.mtbd_models.Model
+    :param ltt: whether to return LTT values as well (default False)
+    :type ltt: bool
     :return: the simulated tree
     :rtype: ete3.Tree
     """
@@ -38,7 +41,7 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
     cur_id = 0, 0
     infectious_state2id[root_state].add(cur_id)
     id2time = {}
-    id2parent = {}
+    id2parent_id = {}
     sampled_id2state = {}
 
     while infectious_nums.sum() and sampled_nums.sum() < max_sampled and time < max_time:
@@ -91,8 +94,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
                             donor_id = parent_id[0], parent_id[1] + 1
                             infectious_state2id[i].add(donor_id)
                             infectious_state2id[j].add(cur_id)
-                            id2parent[cur_id] = parent_id
-                            id2parent[donor_id] = parent_id
+                            id2parent_id[cur_id] = parent_id
+                            id2parent_id[donor_id] = parent_id
                             id2time[parent_id] = time
                             break
                         random_event -= model.transmission_rates[i, j]
@@ -101,16 +104,16 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
             continue
         random_event -= total_transmission_rate
 
-        # case 3: sampling
+        # case 3: removal
         for i in range(num_states):
             if random_event < removal_rate_sums[i]:
                 infectious_nums[i] -= 1
 
-                sampled_id = random_pop(infectious_state2id[i])
-                id2time[sampled_id] = time
+                removed_id = random_pop(infectious_state2id[i])
+                id2time[removed_id] = time
 
                 if np.random.uniform(0, 1, 1)[0] < model.ps[i]:
-                    sampled_id2state[sampled_id] = model.states[i]
+                    sampled_id2state[removed_id] = model.states[i]
                     sampled_nums[i] += 1
 
                 break
@@ -118,7 +121,10 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
     if max_time == np.inf:
         max_time = time
 
-    return reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_feature=state_feature)
+    root = reconstruct_tree(id2parent_id, id2time, sampled_id2state, max_time, state_feature=state_feature)
+    if ltt:
+        return root, reconstruct_ltt(id2parent_id, id2time)
+    return root
 
 
 def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_feature=STATE):
@@ -164,6 +170,38 @@ def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_featu
     return root
 
 
+def reconstruct_ltt(id2parent_id, id2time):
+    time2num = Counter()
+    time2num[0] = 1
+    parents = set(id2parent_id.values())
+    for id, time in id2time.items():
+        if id in parents:
+            time2num[time] += 1
+        else:
+            time2num[time] -= 1
+    total = 0
+    for time in sorted(time2num.keys()):
+        total += time2num[time]
+        time2num[time] = total
+    return time2num
+
+
+def observed_ltt(forest, T):
+    time2num = Counter()
+    time2num[0] = len(forest)
+    for tree in forest:
+        for n in tree.traverse():
+            if n.is_leaf():
+                time2num[T - getattr(n, TIME_TILL_NOW)] -= 1
+            else:
+                time2num[T - getattr(n, TIME_TILL_NOW)] += 1
+    total = 0
+    for time in sorted(time2num.keys()):
+        total += time2num[time]
+        time2num[time] = total
+    return time2num
+
+
 def random_pop(elements):
     """
     Removes a random element from a list and returns it.
@@ -176,21 +214,42 @@ def random_pop(elements):
 
 
 def generate_forest(model, max_time=np.inf, min_tips=1000, max_sampled=np.inf, keep_nones=False, state_feature=STATE,
-                    state_frequencies=None):
+                    state_frequencies=None, ltt=False):
     total_n_tips = 0
     forest = []
     total_trees = 0
     sampled_trees = 0
+    res_ltt = None
     while total_n_tips < min_tips:
-        tree = simulate_tree_gillespie(model, max_time=max_time, max_sampled=max_sampled,
-                                       state_feature=state_feature, state_frequencies=state_frequencies)
+        if ltt:
+            tree, cur_ltt = simulate_tree_gillespie(model, max_time=max_time, max_sampled=max_sampled, ltt=True,
+                                                    state_feature=state_feature, state_frequencies=state_frequencies)
+            if res_ltt is None:
+                res_ltt = cur_ltt
+            else:
+                total = 0
+                prev_res, prev_cur = 0, 0
+                for time in sorted(set(cur_ltt.keys()) | set(res_ltt.keys())):
+                    if time in cur_ltt:
+                        total += cur_ltt[time] - prev_cur
+                        prev_cur = cur_ltt[time]
+                    if time in res_ltt:
+                        total += res_ltt[time] - prev_res
+                        prev_res = res_ltt[time]
+                    res_ltt[time] = total
+        else:
+            tree = simulate_tree_gillespie(model, max_time=max_time, max_sampled=max_sampled,
+                                           state_feature=state_feature, state_frequencies=state_frequencies)
         total_trees += 1
         if tree:
             total_n_tips += len(tree)
             sampled_trees += 1
         if tree or keep_nones:
             forest.append(tree)
-    return forest
+    if ltt:
+        return forest, res_ltt
+    else:
+        return forest
 
 
 def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None):
@@ -216,11 +275,10 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None):
     :param state_frequencies: array of model state frequencies,
         to be used to draw the root states. If not given, will be taken from the model (by default all equal).
     :type state_frequencies: list(float)
-    :type: int
-    :return: the simulated forest (containing only one tree in case of a tree simulation)
-        and stats on total number of tips, on the number of hidden trees (0  case of a tree simulation),
-        and on total time T
-    :rtype: tuple(list(ete3.Tree), (int, int, float))
+    :return: the simulated forest (containing only one tree in case of a tree simulation),
+        stats on total number of tips, on the number of hidden trees (0  case of a tree simulation), and on total time T,
+        and the LTT numbers as a mapping between times and numbers of infected individuals
+    :rtype: tuple(list(ete3.Tree), (int, int, float), dict(float, int))
     """
 
     if max_tips < min_tips:
@@ -228,8 +286,8 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None):
 
     if T < np.inf:
         while True:
-            forest = generate_forest(model, max_time=T, min_tips=min_tips,
-                                     keep_nones=True, state_frequencies=state_frequencies)
+            forest, ltt = generate_forest(model, max_time=T, min_tips=min_tips,
+                                          keep_nones=True, state_frequencies=state_frequencies, ltt=True)
             total_trees = len(forest)
             forest = [tree for tree in forest if tree is not None]
             fl = len(forest)
@@ -238,18 +296,18 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None):
             if total_tips <= max_tips:
                 logging.info('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time {}.'
                              .format(fl, u, total_tips, T))
-                return forest, (total_tips, u, T)
+                return forest, (total_tips, u, T), ltt
             logging.debug('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time {}.'
                           .format(fl, u, total_tips, T))
     else:
         while True:
             max_sampled = int(min_tips + np.random.random() * (max_tips + 1 - min_tips))
-            tree = simulate_tree_gillespie(model, max_time=np.inf, max_sampled=max_sampled,
-                                           state_frequencies=state_frequencies)
+            tree, ltt = simulate_tree_gillespie(model, max_time=np.inf, max_sampled=max_sampled,
+                                                state_frequencies=state_frequencies, ltt=True)
             total_tips = len(tree) if tree else 0
             if total_tips >= min_tips:
                 logging.info('Generated a tree with {} sampled tips over time {}.'
                              .format(total_tips, getattr(tree, TIME_TILL_NOW) if tree else np.inf))
-                return [tree], (total_tips, 0, getattr(tree, TIME_TILL_NOW) + tree.dist)
+                return [tree], (total_tips, 0, getattr(tree, TIME_TILL_NOW) + tree.dist), ltt
             logging.debug('Generated a tree with {} sampled tips over time {}.'
                           .format(total_tips, getattr(tree, TIME_TILL_NOW) if tree else np.inf))
