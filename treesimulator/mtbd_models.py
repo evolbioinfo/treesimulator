@@ -194,3 +194,48 @@ class BirthDeathWithSuperSpreadingModel(Model):
                 'superspreading transmission ratio': self.transmission_rates[1, 1] / self.transmission_rates[0, 1],
                 'superspreading fraction':
                     self.transmission_rates[1, 1] / (self.transmission_rates[1, 1] + self.transmission_rates[1, 0])}
+
+
+class PNModel(Model):
+    def __init__(self, model, removal_rate=np.inf, pn=0.5, *args, **kwargs):
+        Model.__init__(self, states=np.pad(model.states, (0, 1), mode='constant', constant_values='n'),
+                       transition_rates=np.pad(model.transition_rates, ((0, 1), (0, 1)),
+                                               mode='constant', constant_values=0),
+                       transmission_rates=np.pad(model.transmission_rates, ((0, 1), (0, 1)),
+                                                 mode='constant', constant_values=0),
+                       removal_rates=np.pad(model.removal_rates, (0, 1), mode='constant', constant_values=removal_rate),
+                       ps=np.pad(model.ps, (0, 1), mode='constant', constant_values=1),
+                       state_frequencies=np.pad(model.state_frequencies, (0, 1), mode='constant', constant_values=0),
+                       *args, **kwargs)
+        self.__pn = pn
+        self.check_p()
+        self.model = model
+
+    def clone(self):
+        return PNModel(self.model, self.removal_rates[-1], self.__pn)
+
+    @property
+    def pn(self):
+        return self.__pn
+
+    @property
+    def partner_removal_rate(self):
+        """
+        Get partner removal rate
+
+        :return partner removal rate
+        :rtype np.float
+        """
+        return self.removal_rates[-1]
+
+    def get_name(self):
+        return self.model.get_name() + '-PN'
+
+    def check_p(self):
+        assert(0 <= self.__pn <= 1)
+
+    def get_epidemiological_parameters(self):
+        res = self.model.get_epidemiological_parameters()
+        res['notification probability'] = self.pn
+        res['removal time after notification'] = 1 / self.removal_rates[-1]
+        return res

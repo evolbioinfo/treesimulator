@@ -6,6 +6,7 @@ import numpy as np
 from ete3 import TreeNode
 
 from treesimulator import STATE, DIST_TO_START, TIME_TILL_NOW
+from treesimulator.mtbd_models import PNModel
 
 
 def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
@@ -43,6 +44,9 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
     id2time = {}
     id2parent_id = {}
     sampled_id2state = {}
+    donor_id2recipient_id = {}
+    id2current_id = {0: 0}
+    id2state = {0: root_state}
 
     while infectious_nums.sum() and sampled_nums.sum() < max_sampled and time < max_time:
         # first we need to calculate rate sum
@@ -73,7 +77,10 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
                     for j in range(num_states):
                         if random_event < model.transition_rates[i, j]:
                             infectious_nums[j] += 1
-                            infectious_state2id[j].add(random_pop(infectious_state2id[i]))
+                            state_changing_id = random_pop(infectious_state2id[i])
+                            id2state[state_changing_id[0]] = j
+                            infectious_state2id[j].add(state_changing_id)
+                            # print('{}:\t{} changed state from {} to {}'.format(time, state_changing_id, model.states[i], model.states[j]))
                             break
                         random_event -= model.transition_rates[i, j]
                     break
@@ -90,13 +97,18 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
                         if random_event < model.transmission_rates[i, j]:
                             infectious_nums[j] += 1
                             cur_id = cur_id[0] + 1, 0
+                            id2current_id[cur_id[0]] = 0
+                            id2state[cur_id[0]] = j
                             parent_id = random_pop(infectious_state2id[i])
                             donor_id = parent_id[0], parent_id[1] + 1
+                            id2current_id[donor_id[0]] = donor_id[1]
+                            donor_id2recipient_id[parent_id] = cur_id
                             infectious_state2id[i].add(donor_id)
                             infectious_state2id[j].add(cur_id)
                             id2parent_id[cur_id] = parent_id
                             id2parent_id[donor_id] = parent_id
                             id2time[parent_id] = time
+                            # print('{}:\t{} (in state {}) transmitted to {} (in state {})'.format(time, parent_id, model.states[i], cur_id, model.states[j]))
                             break
                         random_event -= model.transmission_rates[i, j]
                     break
@@ -111,13 +123,35 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
 
                 removed_id = random_pop(infectious_state2id[i])
                 id2time[removed_id] = time
+                # print('{}:\t{} (in state {}) got removed'.format(time, removed_id, model.states[i]))
 
                 if np.random.uniform(0, 1, 1)[0] < model.ps[i]:
                     sampled_id2state[removed_id] = model.states[i]
                     sampled_nums[i] += 1
+                    # print('\tand sampled')
 
+                    # partner notification
+                    # if it is not the root
+                    # and not a notified partner him/herself (num_states - 1 is the state of a notified partner)
+                    if isinstance(model, PNModel) and np.random.uniform(0, 1, 1)[0] < model.pn \
+                            and i != (num_states - 1) \
+                            and removed_id in id2parent_id:
+                        parent_id = id2parent_id[removed_id]
+                        donor_id = (parent_id[0], parent_id[1] + 1)
+                        partner_id = donor_id2recipient_id[parent_id] if removed_id == donor_id else donor_id
+                        partner_id = partner_id[0], id2current_id[partner_id[0]]
+                        # If the partner is not yet removed, notify them
+                        if partner_id not in id2time:
+                            i = id2state[partner_id[0]]
+                            id2state[partner_id[0]] = num_states - 1
+                            infectious_state2id[i].remove(partner_id)
+                            infectious_state2id[num_states - 1].add(partner_id)
+                            infectious_nums[i] -= 1
+                            infectious_nums[num_states - 1] += 1
+                            # print('\tand notified {} (in state {})'.format(partner_id, model.states[i]))
                 break
-            random_event -= total_removal_rate
+            random_event -= removal_rate_sums[i]
+
     if max_time == np.inf:
         max_time = time
 

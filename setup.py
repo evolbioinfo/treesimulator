@@ -13,7 +13,7 @@ setup(
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    version='0.1.2',
+    version='0.1.3',
     description='Simulation of rooted phylogenetic trees under a given Multitype Birth–Death model.',
     author='Anna Zhukova',
     author_email='anna.zhukova@pasteur.fr',
@@ -26,6 +26,10 @@ setup(
                 'generate_bdei = treesimulator.simulate_forest_bdei:main',
                 'generate_bdss = treesimulator.simulate_forest_bdss:main',
                 'generate_mtbd = treesimulator.simulate_forest:main',
+                'generate_bdpn = treesimulator.simulate_forest_bdpn:main',
+                'generate_bdeipn = treesimulator.simulate_forest_bdeipn:main',
+                'generate_bdsspn = treesimulator.simulate_forest_bdsspn:main',
+                'generate_mtbdpn = treesimulator.simulate_forest_pn:main',
             ]
     },
 )
