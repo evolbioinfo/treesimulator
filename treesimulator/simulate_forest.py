@@ -4,7 +4,7 @@ import numpy as np
 
 from treesimulator import save_forest, save_log, save_ltt
 from treesimulator.generator import generate, observed_ltt
-from treesimulator.mtbd_models import Model
+from treesimulator.mtbd_models import Model, PNModel
 
 
 def main():
@@ -51,6 +51,8 @@ def main():
                         help="sampling probability array, in the same order as model states, "
                              "e.g. ig a model has 2 states given as --states E I,"
                              "then here we expect p(E) p(I).")
+    parser.add_argument('--pn', required=False, default=0, type=float, help='notification probability')
+    parser.add_argument('--partner_psi', required=False, default=0, type=float, help='partner removal rate')
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
@@ -74,6 +76,8 @@ def main():
                   transmission_rates=transition_rates,
                   transition_rates=transmission_rates,
                   removal_rates=params.removal_rates, ps=params.sampling_probabilities)
+    if params.pn and params.pn > 0:
+        model = PNModel(model=model, pn=params.pn, removal_rate=params.partner_psi)
 
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T)
 

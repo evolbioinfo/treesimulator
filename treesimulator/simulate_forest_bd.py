@@ -4,7 +4,7 @@ import numpy as np
 
 from treesimulator import save_forest, save_log, save_ltt
 from treesimulator.generator import generate, observed_ltt
-from treesimulator.mtbd_models import BirthDeathModel
+from treesimulator.mtbd_models import BirthDeathModel, PNModel
 
 
 def main():
@@ -37,6 +37,8 @@ def main():
     parser.add_argument('--la', required=True, type=float, help="transmission rate")
     parser.add_argument('--psi', required=True, type=float, help="removal rate")
     parser.add_argument('--p', required=True, type=float, help='sampling probability')
+    parser.add_argument('--pn', required=False, default=0, type=float, help='notification probability')
+    parser.add_argument('--partner_psi', required=False, default=0, type=float, help='partner removal rate')
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
@@ -48,6 +50,9 @@ def main():
     logging.info('Total time T={}'.format(params.T))
 
     model = BirthDeathModel(p=params.p, la=params.la, psi=params.psi)
+    if params.pn and params.pn > 0:
+        model = PNModel(model=model, pn=params.pn, removal_rate=params.partner_psi)
+
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T)
 
     save_forest(forest, params.nwk)
