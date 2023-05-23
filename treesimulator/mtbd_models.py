@@ -1,9 +1,9 @@
 import numpy as np
+from scipy.optimize import fsolve
 
 EXPOSED = 'e'
 INFECTED = 'i'
 SUPERSPREADER = 's'
-
 
 SAMPLING = 'sampling'
 TRANSMISSION = 'transmission'
@@ -11,14 +11,12 @@ TRANSITION = 'transition'
 
 
 class Model(object):
+
     def __init__(self, states=None,
-                 transition_rates=None, transmission_rates=None, removal_rates=None, ps=None,
-                 state_frequencies=None, *args, **kwargs):
+                 transition_rates=None, transmission_rates=None, removal_rates=None, ps=None, *args, **kwargs):
         super(Model, self).__init__()
         self.__states = np.array(states)
         num_states = len(self.states)
-        self.__state_freqs = ((1 / num_states) * np.ones(num_states, dtype=float)) \
-            if state_frequencies is None else np.array(state_frequencies)
         self.__ps = np.array(ps) if ps is not None else np.ones(num_states, dtype=float)
         self.__transmission_rates = np.array(transmission_rates) if transmission_rates is not None \
             else np.zeros(shape=(num_states, num_states), dtype=np.float)
@@ -35,13 +33,31 @@ class Model(object):
     def ps(self):
         return self.__ps
 
+    @ps.setter
+    def ps(self, ps):
+        self.__ps = ps
+
     @property
     def states(self):
         return self.__states
 
     @property
     def state_frequencies(self):
-        return self.__state_freqs
+        MU, LA, PSI = self.transition_rates, self.transmission_rates, self.removal_rates
+        m = len(self.states)
+
+        def func(PI):
+            SIGMA = PI.dot(LA.sum(axis=1) - PSI)
+            res = [PI.sum() - 1]
+            for k in range(m - 1):
+                pi_k = PI[k]
+                res.append(pi_k * SIGMA + pi_k * (PSI[k] + MU[k, :].sum()) - PI.dot(MU[:, k] + LA[:, k]))
+            return res
+
+        PI = fsolve(func, np.ones(m) / m)
+        if np.any(PI < 0) or np.any(PI > 1):
+            return np.ones(m) / m
+        return PI
 
     @property
     def transition_rates(self):
@@ -53,6 +69,10 @@ class Model(object):
         """
         return self.__transition_rates
 
+    @transition_rates.setter
+    def transition_rates(self, rates):
+        self.__transition_rates = rates
+
     @property
     def transmission_rates(self):
         """
@@ -62,6 +82,10 @@ class Model(object):
         :rtype np.array
         """
         return self.__transmission_rates
+
+    @transmission_rates.setter
+    def transmission_rates(self, rates):
+        self.__transmission_rates = rates
 
     @property
     def removal_rates(self):
@@ -73,19 +97,23 @@ class Model(object):
         """
         return self.__removal_rates
 
+    @removal_rates.setter
+    def removal_rates(self, rates):
+        self.__removal_rates = rates
+
     def get_name(self):
         return 'MTBD'
 
     def check_rates(self):
         n_states = len(self.states)
-        assert(self.transition_rates.shape == (n_states, n_states))
-        assert(self.transmission_rates.shape == (n_states, n_states))
-        assert(self.removal_rates.shape == (n_states,))
-        assert(self.ps.shape == (n_states,))
-        assert(np.all(self.transition_rates >= 0))
-        assert(np.all(self.transmission_rates >= 0))
-        assert(np.all(self.removal_rates >= 0))
-        assert(np.all(self.ps >= 0) and np.all(self.ps <= 1))
+        assert (self.transition_rates.shape == (n_states, n_states))
+        assert (self.transmission_rates.shape == (n_states, n_states))
+        assert (self.removal_rates.shape == (n_states,))
+        assert (self.ps.shape == (n_states,))
+        assert (np.all(self.transition_rates >= 0))
+        assert (np.all(self.transmission_rates >= 0))
+        assert (np.all(self.removal_rates >= 0))
+        assert (np.all(self.ps >= 0) and np.all(self.ps <= 1))
 
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
@@ -109,6 +137,15 @@ class BirthDeathExposedInfectiousModel(Model):
         psis = np.zeros(shape=2, dtype=np.float)
         psis[1] = psi
 
+        Model.__init__(self, states=[EXPOSED, INFECTED],
+                       transition_rates=mus, transmission_rates=las, removal_rates=psis, ps=[0, p],
+                       *args, **kwargs)
+
+    @property
+    def state_frequencies(self):
+        mu = self.transition_rates[0, 1]
+        la = self.transmission_rates[1, 0]
+        psi = self.removal_rates[1]
         mu_plus_psi = mu + psi
         if la == psi:
             pi_i = mu / mu_plus_psi
@@ -116,12 +153,7 @@ class BirthDeathExposedInfectiousModel(Model):
             two_la_minus_psi = 2 * (la - psi)
             det = np.power(np.power(mu_plus_psi, 2) + 2 * mu * two_la_minus_psi, 1 / 2)
             pi_i = (det - mu_plus_psi) / two_la_minus_psi
-            if pi_i < 0 or pi_i > 1:
-                pi_i = (-det - mu_plus_psi) / two_la_minus_psi
-
-        Model.__init__(self, states=[EXPOSED, INFECTED],
-                       transition_rates=mus, transmission_rates=las, removal_rates=psis, ps=[0, p],
-                       state_frequencies=[1 - pi_i, pi_i], *args, **kwargs)
+        return np.array([1 - pi_i, pi_i])
 
     def get_name(self):
         return 'BDEI'
@@ -178,17 +210,22 @@ class BirthDeathWithSuperSpreadingModel(Model):
         las[1, 0] = la_sn
         las[1, 1] = la_ss
         psis = psi * np.ones(shape=2, dtype=np.float)
-        f = la_ss / (la_ss + la_sn)
         Model.__init__(self, states=[INFECTED, SUPERSPREADER],
-                       transmission_rates=las, removal_rates=psis, ps=[p, p],
-                       state_frequencies=[1 - f, f], *args, **kwargs)
+                       transmission_rates=las, removal_rates=psis, ps=[p, p], *args, **kwargs)
+
+    @property
+    def state_frequencies(self):
+        la_ss = self.transmission_rates[1, 1]
+        la_sn = self.transmission_rates[1, 0]
+        f = la_ss / (la_ss + la_sn)
+        return np.array([1 - f, f])
 
     def get_name(self):
         return 'BDSS'
 
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
-        return {'R0': (self.transmission_rates[0, 0] + self.transition_rates[1, 1]) / self.removal_rates[0],
+        return {'R0': (self.transmission_rates[0, 0] + self.transmission_rates[1, 1]) / self.removal_rates[0],
                 'infectious time': 1 / self.removal_rates[1],
                 'sampling probability': self.ps[1],
                 'superspreading transmission ratio': self.transmission_rates[1, 1] / self.transmission_rates[0, 1],
@@ -232,7 +269,7 @@ class PNModel(Model):
         return self.model.get_name() + '-PN'
 
     def check_p(self):
-        assert(0 <= self.__pn <= 1)
+        assert (0 <= self.__pn <= 1)
 
     def get_epidemiological_parameters(self):
         res = self.model.get_epidemiological_parameters()
