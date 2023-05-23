@@ -51,6 +51,7 @@ def main():
 
     model = BirthDeathModel(p=params.p, la=params.la, psi=params.psi)
     if params.pn and params.pn > 0:
+        logging.info('PN model parameters are:\n\tpsi_n={}\n\tp_n={}'.format(params.partner_psi, params.pn))
         model = PNModel(model=model, pn=params.pn, removal_rate=params.partner_psi)
 
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T)

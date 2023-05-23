@@ -1,6 +1,6 @@
 import logging
 import random
-from collections import Counter
+from collections import Counter, defaultdict
 
 import numpy as np
 from ete3 import TreeNode
@@ -9,7 +9,7 @@ from treesimulator import STATE, DIST_TO_START, TIME_TILL_NOW
 from treesimulator.mtbd_models import PNModel
 
 
-def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
+def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=np.inf,
                             state_feature=STATE, state_frequencies=None, ltt=False):
     """
     Simulates the tree evolution from a root over the given time based on the given model.
@@ -17,7 +17,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
     :param state_feature: a name of the tree feature which will store node states
     :param state_frequencies: array of equilibrium frequencies of model states
         (to be used to draw the root state). If not given, will be taken from the model (by default all equal).
-    :param max_sampled: maximal number of sampling node (when reached, the simulation stops), by default infinity
+    :param min_sampled: minimal number of sampled nodes (when reached, the simulation could stop), by default 0
+    :param max_sampled: maximal number of sampled nodes (when reached, the simulation stops), by default infinity
     :type max_sampled: int
     :param max_time: time over which we generate a tree, by default infinity
     :type max_time: float
@@ -48,7 +49,21 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
     id2current_id = {0: 0}
     id2state = {0: root_state}
 
-    while infectious_nums.sum() and sampled_nums.sum() < max_sampled and time < max_time:
+    # logging.info('Aiming for at most {} sampled cases over time {}'.format(max_sampled, max_time))
+
+    def sampled_enough():
+        return sampled_nums.sum() >= min_sampled
+
+    if not isinstance(model, PNModel) and max_sampled != np.inf:
+        max_sampled = int(min_sampled + np.random.random() * (max_sampled + 1 - min_sampled))
+
+    def sampled_too_much():
+        return sampled_nums.sum() > max_sampled
+
+    # If there is PN, let us keep different proportions of unsampled partners depending on time and sampled numbers
+    unsampled_partner_proportion2time = defaultdict(list)
+
+    while infectious_nums.sum() and not sampled_too_much() and time < max_time:
         # first we need to calculate rate sum
         transmission_rate_sums = model.transmission_rates.sum(axis=1) * infectious_nums
         transition_rate_sums = model.transition_rates.sum(axis=1) * infectious_nums
@@ -58,11 +73,10 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
         total_removal_rate = removal_rate_sums.sum()
         total_rate = total_transmission_rate + total_transition_rate + total_removal_rate
 
-        # now let us see when next event takes place
+        # check if we passed the time limit
         time += np.random.exponential(1 / total_rate, 1)[0]
-
-        # Check if the time is up
-        if time > max_time:
+        if time >= max_time:
+            time = max_time
             break
 
         # now let us see which event will happen
@@ -149,8 +163,19 @@ def simulate_tree_gillespie(model, max_time=np.inf, max_sampled=np.inf,
                             infectious_nums[i] -= 1
                             infectious_nums[num_states - 1] += 1
                             # print('\tand notified {} (in state {})'.format(partner_id, model.states[i]))
+
+                # if we could already stop, let's update unsampled partner proportion for this time
+                if sampled_enough() and isinstance(model, PNModel):
+                    unsampled_partner_proportion2time[infectious_nums[-1] / sampled_nums[-1] if sampled_nums[-1] else 1]\
+                        .append(time)
                 break
             random_event -= removal_rate_sums[i]
+
+    if isinstance(model, PNModel) and unsampled_partner_proportion2time:
+        min_unsampled_proportion = min(unsampled_partner_proportion2time.keys())
+        logging.info('At the end of the sampling period {:g}% of notified partners stayed unobserved'
+                     .format(min_unsampled_proportion * 100))
+        time = np.random.choice(unsampled_partner_proportion2time[min_unsampled_proportion], 1)[0]
 
     if max_time == np.inf:
         max_time = time
@@ -169,6 +194,10 @@ def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_featu
     id2node = {}
     for node_id, state in sampled_id2state.items():
         time = id2time[node_id]
+        # if there is PN it could be
+        # that we decided to stop at an earlier time when the unsampled partner proportion was lower
+        if time > max_time:
+            continue
         node = TreeNode(dist=time - (0 if node_id not in id2parent else id2time[id2parent[node_id]]), name=node_id[0])
         node.add_feature(DIST_TO_START, time)
         node.add_feature(state_feature, state)
@@ -335,8 +364,7 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None):
                           .format(fl, u, total_tips, T))
     else:
         while True:
-            max_sampled = int(min_tips + np.random.random() * (max_tips + 1 - min_tips))
-            tree, ltt = simulate_tree_gillespie(model, max_time=np.inf, max_sampled=max_sampled,
+            tree, ltt = simulate_tree_gillespie(model, max_time=np.inf, max_sampled=max_tips, min_sampled=min_tips,
                                                 state_frequencies=state_frequencies, ltt=True)
             total_tips = len(tree) if tree else 0
             if total_tips >= min_tips:

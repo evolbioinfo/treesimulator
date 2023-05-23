@@ -57,6 +57,7 @@ def main():
                                               la_ss=params.la_ss, la_sn=params.la_sn,
                                               la_ns=params.la_ns, la_nn=params.la_nn, psi=params.psi)
     if params.pn and params.pn > 0:
+        logging.info('PN model parameters are:\n\tpsi_n={}\n\tp_n={}'.format(params.partner_psi, params.pn))
         model = PNModel(model=model, pn=params.pn, removal_rate=params.partner_psi)
 
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T)
