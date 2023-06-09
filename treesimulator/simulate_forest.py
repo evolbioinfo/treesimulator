@@ -68,13 +68,13 @@ def main():
         'MTBD model parameters are:\n'
         '\ttransition_rates=\n{}\n'
         '\ttransmission_rates=\n{}\n'
-        '\ttransmission_rates={}\n'
+        '\tremoval_rates={}\n'
         '\tps={}'.format(transition_rates, transmission_rates, params.removal_rates, params.sampling_probabilities))
     logging.info('Total time T={}'.format(params.T))
 
     model = Model(states=params.states,
                   transmission_rates=transition_rates,
-                  transition_rates=transmission_rates,
+                  transition_rates=transition_rates,
                   removal_rates=params.removal_rates, ps=params.sampling_probabilities)
     if params.pn and params.pn > 0:
         model = PNModel(model=model, pn=params.pn, removal_rate=params.partner_psi)
