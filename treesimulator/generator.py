@@ -35,9 +35,9 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
     root_state = np.random.choice(np.arange(num_states), size=1, p=state_frequencies)[0]
     # evolve till the time is up, following Gillespie
     time = 0
-    infectious_nums = np.zeros(num_states, dtype=np.int)
+    infectious_nums = np.zeros(num_states, dtype=np.int64)
     infectious_nums[root_state] = 1
-    sampled_nums = np.zeros(num_states, dtype=np.int)
+    sampled_nums = np.zeros(num_states, dtype=np.int64)
 
     infectious_state2id = [set() for _ in model.states]
     cur_id = 0, 0
@@ -146,9 +146,7 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
 
                     # partner notification
                     # if it is not the root
-                    # and not a notified partner him/herself (num_states - 1 is the state of a notified partner)
                     if isinstance(model, PNModel) and np.random.uniform(0, 1, 1)[0] < model.pn \
-                            and i != (num_states - 1) \
                             and removed_id in id2parent_id:
                         parent_id = id2parent_id[removed_id]
                         donor_id = (parent_id[0], parent_id[1] + 1)
@@ -268,10 +266,10 @@ def observed_ltt(forest, T):
 def random_pop(elements):
     """
     Removes a random element from a list and returns it.
-    :param elements: list of elemetns
+    :param elements: list of elements
     :return: the selected element
     """
-    element = random.sample(elements, 1)[0]
+    element = random.sample(list(elements), 1)[0]
     elements.remove(element)
     return element
 
