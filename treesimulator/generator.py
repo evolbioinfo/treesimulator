@@ -94,7 +94,7 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                             state_changing_id = random_pop(infectious_state2id[i])
                             id2state[state_changing_id[0]] = j
                             infectious_state2id[j].add(state_changing_id)
-                            # print('{}:\t{} changed state from {} to {}'.format(time, state_changing_id, model.states[i], model.states[j]))
+                            logging.debug('Time {}:\t{} changed state from {} to {}'.format(time, state_changing_id, model.states[i], model.states[j]))
                             break
                         random_event -= model.transition_rates[i, j]
                     break
@@ -122,7 +122,7 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                             id2parent_id[cur_id] = parent_id
                             id2parent_id[donor_id] = parent_id
                             id2time[parent_id] = time
-                            # print('{}:\t{} (in state {}) transmitted to {} (in state {})'.format(time, parent_id, model.states[i], cur_id, model.states[j]))
+                            logging.debug('Time {}:\t{} in state {} transmitted to {} in state {}'.format(time, parent_id, model.states[i], cur_id, model.states[j]))
                             break
                         random_event -= model.transmission_rates[i, j]
                     break
@@ -137,12 +137,12 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
 
                 removed_id = random_pop(infectious_state2id[i])
                 id2time[removed_id] = time
-                # print('{}:\t{} (in state {}) got removed'.format(time, removed_id, model.states[i]))
+                msg = 'Time {}:\t{} in state {} got removed'.format(time, removed_id, model.states[i])
 
                 if np.random.uniform(0, 1, 1)[0] < model.ps[i]:
                     sampled_id2state[removed_id] = model.states[i]
                     sampled_nums[i] += 1
-                    # print('\tand sampled')
+                    msg += ' and sampled'
 
                     # partner notification
                     # if it is not the root
@@ -160,7 +160,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                             infectious_state2id[num_states - 1].add(partner_id)
                             infectious_nums[i] -= 1
                             infectious_nums[num_states - 1] += 1
-                            # print('\tand notified {} (in state {})'.format(partner_id, model.states[i]))
+                            msg += ' and notified {} in state {}'.format(partner_id, model.states[i])
+                logging.debug(msg)
 
                 # if we could already stop, let's update unsampled partner proportion for this time
                 if sampled_enough() and isinstance(model, PNModel):

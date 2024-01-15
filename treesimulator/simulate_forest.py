@@ -37,28 +37,30 @@ def main():
     parser.add_argument('--states', nargs='+', type=str, help="model states")
     parser.add_argument('--transition_rates', nargs='+', type=float,
                         help="transition rate matrix, row after row, in the same order as model states, "
-                             "e.g. ig a model has 2 states given as --states E I,"
+                             "e.g. if a model has 2 states given as --states E I,"
                              "then here we expect E->E E->I I->E I->I.")
     parser.add_argument('--transmission_rates', nargs='+', type=float,
                         help="transmission rate matrix, row after row, in the same order as model states, "
-                             "e.g. ig a model has 2 states given as --states E I,"
+                             "e.g. if a model has 2 states given as --states E I,"
                              "then here we expect E->E E->I I->E I->I.")
     parser.add_argument('--removal_rates', nargs='+', type=float,
                         help="removal rate array, in the same order as model states, "
-                             "e.g. ig a model has 2 states given as --states E I,"
+                             "e.g. if a model has 2 states given as --states E I,"
                              "then here we expect removal(E) removal(I).")
     parser.add_argument('--sampling_probabilities', nargs='+', type=float,
                         help="sampling probability array, in the same order as model states, "
-                             "e.g. ig a model has 2 states given as --states E I,"
+                             "e.g. if a model has 2 states given as --states E I,"
                              "then here we expect p(E) p(I).")
     parser.add_argument('--pn', required=False, default=0, type=float, help='notification probability')
     parser.add_argument('--partner_psi', required=False, default=0, type=float, help='partner removal rate')
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help="print information on the progress of the tree generation (to console)")
     params = parser.parse_args()
     logging.getLogger().handlers = []
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format='%(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
     n_states = len(params.states)
     transition_rates = np.array(params.transition_rates).reshape((n_states, n_states))
@@ -69,15 +71,17 @@ def main():
         '\ttransition_rates=\n{}\n'
         '\ttransmission_rates=\n{}\n'
         '\tremoval_rates={}\n'
-        '\tps={}'.format(transition_rates, transmission_rates, params.removal_rates, params.sampling_probabilities))
+        '\tsampling probabilities={}'.format(transition_rates, transmission_rates, params.removal_rates, params.sampling_probabilities))
     logging.info('Total time T={}'.format(params.T))
 
     model = Model(states=params.states,
-                  transmission_rates=transition_rates,
+                  transmission_rates=transmission_rates,
                   transition_rates=transition_rates,
                   removal_rates=params.removal_rates, ps=params.sampling_probabilities)
     if params.pn and params.pn > 0:
         model = PNModel(model=model, pn=params.pn, removal_rate=params.partner_psi)
+
+    logging.getLogger().setLevel(level=logging.DEBUG if params.verbose else logging.ERROR)
 
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T)
 

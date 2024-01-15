@@ -106,14 +106,24 @@ class Model(object):
 
     def check_rates(self):
         n_states = len(self.states)
-        assert (self.transition_rates.shape == (n_states, n_states))
-        assert (self.transmission_rates.shape == (n_states, n_states))
-        assert (self.removal_rates.shape == (n_states,))
-        assert (self.ps.shape == (n_states,))
-        assert (np.all(self.transition_rates >= 0))
-        assert (np.all(self.transmission_rates >= 0))
-        assert (np.all(self.removal_rates >= 0))
-        assert (np.all(self.ps >= 0) and np.all(self.ps <= 1))
+        if self.transition_rates.shape != (n_states, n_states):
+            raise ValueError("Transition matrix shape is wrong, should be {}x{}.".format(n_states, n_states))
+        if self.transmission_rates.shape != (n_states, n_states):
+            raise ValueError("Transmission matrix shape is wrong, should be {}x{}.".format(n_states, n_states))
+        if self.removal_rates.shape != (n_states,):
+            raise ValueError("Removal rate vector length is wrong, should be {}.".format(n_states))
+        if self.ps.shape != (n_states,):
+            raise ValueError("Sampling probability vector length is wrong, should be {}.".format(n_states))
+        if not np.all(self.transition_rates >= 0):
+            raise ValueError("Transition rates cannot be negative")
+        if not np.all(self.transmission_rates >= 0):
+            raise ValueError("Transmission rates cannot be negative")
+        if not np.all(self.removal_rates >= 0):
+            raise ValueError("Removal rates cannot be negative")
+        if not np.all(self.ps >= 0):
+            raise ValueError("Sampling probabilities cannot be negative")
+        if not np.all(self.ps <= 1):
+            raise ValueError('Sampling probabilities cannot be greater than 1')
 
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
