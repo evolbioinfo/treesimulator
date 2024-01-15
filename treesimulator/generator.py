@@ -73,6 +73,7 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
         total_removal_rate = removal_rate_sums.sum()
         total_rate = total_transmission_rate + total_transition_rate + total_removal_rate
 
+
         # check if we passed the time limit
         time += np.random.exponential(1 / total_rate, 1)[0]
         if time >= max_time:
@@ -86,8 +87,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
         if random_event < total_transition_rate:
             for i in range(num_states):
                 if random_event < transition_rate_sums[i]:
-                    infectious_nums[i] -= 1
                     random_event /= infectious_nums[i]
+                    infectious_nums[i] -= 1
                     for j in range(num_states):
                         if random_event < model.transition_rates[i, j]:
                             infectious_nums[j] += 1
