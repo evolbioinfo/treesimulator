@@ -73,7 +73,6 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
         total_removal_rate = removal_rate_sums.sum()
         total_rate = total_transmission_rate + total_transition_rate + total_removal_rate
 
-
         # check if we passed the time limit
         time += np.random.exponential(1 / total_rate, 1)[0]
         if time >= max_time:
@@ -95,7 +94,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                             state_changing_id = random_pop(infectious_state2id[i])
                             id2state[state_changing_id[0]] = j
                             infectious_state2id[j].add(state_changing_id)
-                            logging.debug('Time {}:\t{} changed state from {} to {}'.format(time, state_changing_id, model.states[i], model.states[j]))
+                            logging.debug('Time {}:\t{} changed state from {} to {}'
+                                          .format(time, state_changing_id, model.states[i], model.states[j]))
                             break
                         random_event -= model.transition_rates[i, j]
                     break
@@ -123,7 +123,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                             id2parent_id[cur_id] = parent_id
                             id2parent_id[donor_id] = parent_id
                             id2time[parent_id] = time
-                            logging.debug('Time {}:\t{} in state {} transmitted to {} in state {}'.format(time, parent_id, model.states[i], cur_id, model.states[j]))
+                            logging.debug('Time {}:\t{} in state {} transmitted to {} in state {}'
+                                          .format(time, parent_id, model.states[i], cur_id, model.states[j]))
                             break
                         random_event -= model.transmission_rates[i, j]
                     break
@@ -155,13 +156,16 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                         partner_id = partner_id[0], id2current_id[partner_id[0]]
                         # If the partner is not yet removed, notify them
                         if partner_id not in id2time:
-                            i = id2state[partner_id[0]]
-                            id2state[partner_id[0]] = num_states - 1
-                            infectious_state2id[i].remove(partner_id)
-                            infectious_state2id[num_states - 1].add(partner_id)
-                            infectious_nums[i] -= 1
-                            infectious_nums[num_states - 1] += 1
-                            msg += ' and notified {} in state {}'.format(partner_id, model.states[i])
+                            unnotified_partner_i = id2state[partner_id[0]]
+                            # The ids are organised as follows: s1, s2, ..., sn, s1-n, s2-n, ..., sn-n
+                            notified_partner_i = num_states // 2 + unnotified_partner_i
+                            id2state[partner_id[0]] = notified_partner_i
+                            infectious_state2id[unnotified_partner_i].remove(partner_id)
+                            infectious_state2id[notified_partner_i].add(partner_id)
+                            infectious_nums[unnotified_partner_i] -= 1
+                            infectious_nums[notified_partner_i] += 1
+                            msg += ' and notified {} in state {}'\
+                                .format(partner_id, model.states[unnotified_partner_i])
                 logging.debug(msg)
 
                 # if we could already stop, let's update unsampled partner proportion for this time
