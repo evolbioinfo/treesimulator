@@ -245,10 +245,14 @@ class BirthDeathWithSuperSpreadingModel(Model):
 
 class PNModel(Model):
     def __init__(self, model, removal_rate=np.inf, pn=0.5, *args, **kwargs):
-        transition_rates = np.pad(model.transition_rates, ((0, 1), (0, 1)), mode='constant', constant_values=0)
-        transition_rates[transition_rates.shape[0]:, transition_rates.shape[1]:] = model.transition_rates
+        transition_rates = np.pad(model.transition_rates, ((0, model.transition_rates.shape[0]),
+                                                           (0, model.transition_rates.shape[1])),
+                                  mode='constant', constant_values=0)
+        transition_rates[model.transition_rates.shape[0]:, model.transition_rates.shape[1]:] = model.transition_rates
 
-        transmission_rates = np.pad(model.transmission_rates, ((0, 1), (0, 1)), mode='constant', constant_values=0)
+        transmission_rates = np.pad(model.transmission_rates, ((0, model.transmission_rates.shape[0]),
+                                                               (0, model.transmission_rates.shape[1])),
+                                    mode='constant', constant_values=0)
         transmission_rates[model.transmission_rates.shape[0]:, model.transmission_rates.shape[1]:] \
             = model.transmission_rates
 
