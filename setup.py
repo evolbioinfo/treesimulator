@@ -13,13 +13,14 @@ setup(
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    version='0.1.10',
+    version='0.1.11',
     description='Simulation of rooted phylogenetic trees under a given Multitype Birth–Death model.',
     author='Anna Zhukova',
     author_email='anna.zhukova@pasteur.fr',
     url='https://github.com/evolbioinfo/treesimulator',
     keywords=['phylogenetics', 'tree generator', 'multitype birth-death model'],
-    install_requires=['six', 'ete3', 'numpy'],
+    install_requires=['six', 'ete3', 'numpy', 'scipy'],
+    requires=['six', 'ete3', 'numpy', 'scipy'],
     entry_points={
             'console_scripts': [
                 'generate_bd = treesimulator.simulate_forest_bd:main',
