@@ -158,12 +158,14 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                         if partner_id not in id2time:
                             unnotified_partner_i = id2state[partner_id[0]]
                             # The ids are organised as follows: s1, s2, ..., sn, s1-n, s2-n, ..., sn-n
-                            notified_partner_i = num_states // 2 + unnotified_partner_i
-                            id2state[partner_id[0]] = notified_partner_i
-                            infectious_state2id[unnotified_partner_i].remove(partner_id)
-                            infectious_state2id[notified_partner_i].add(partner_id)
-                            infectious_nums[unnotified_partner_i] -= 1
-                            infectious_nums[notified_partner_i] += 1
+                            # Hence if we have an id >= n then the partner was already notified by someone else
+                            if unnotified_partner_i < num_states // 2:
+                                notified_partner_i = num_states // 2 + unnotified_partner_i
+                                id2state[partner_id[0]] = notified_partner_i
+                                infectious_state2id[unnotified_partner_i].remove(partner_id)
+                                infectious_state2id[notified_partner_i].add(partner_id)
+                                infectious_nums[unnotified_partner_i] -= 1
+                                infectious_nums[notified_partner_i] += 1
                             msg += ' and notified {} in state {}'\
                                 .format(partner_id, model.states[unnotified_partner_i])
                 logging.debug(msg)
