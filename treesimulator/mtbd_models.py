@@ -259,9 +259,11 @@ class PNModel(Model):
         Model.__init__(self, states=[_ for _ in model.states] + ['{}n'.format(_) for _ in model.states],
                        transition_rates=transition_rates,
                        transmission_rates=transmission_rates,
-                       removal_rates=np.pad(model.removal_rates, (0, 1), mode='constant', constant_values=removal_rate),
-                       ps=np.pad(model.ps, (0, 1), mode='constant', constant_values=1),
-                       state_frequencies=np.pad(model.state_frequencies, (0, 1), mode='constant', constant_values=0),
+                       removal_rates=np.pad(model.removal_rates, (0, model.removal_rates.shape[0]),
+                                            mode='constant', constant_values=removal_rate),
+                       ps=np.pad(model.ps, (0, model.ps.shape[0]), mode='constant', constant_values=1),
+                       state_frequencies=np.pad(model.state_frequencies, (0, model.state_frequencies.shape[0]),
+                                                mode='constant', constant_values=0),
                        *args, **kwargs)
         self.__pn = pn
         self.check_p()
