@@ -157,8 +157,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                         # If the partner is not yet removed, notify them
                         if partner_id not in id2time:
                             unnotified_partner_i = id2state[partner_id[0]]
-                            # The ids are organised as follows: s1, s2, ..., sn, s1-n, s2-n, ..., sn-n
-                            # Hence if we have an id >= n then the partner was already notified by someone else
+                            # The ids are organised as follows: s1, s2, ..., sm, s1-n, s2-n, ..., sm-n
+                            # Hence if we have an id >= m then the partner was already notified by someone else
                             if unnotified_partner_i < num_states // 2:
                                 notified_partner_i = num_states // 2 + unnotified_partner_i
                                 id2state[partner_id[0]] = notified_partner_i
