@@ -244,7 +244,7 @@ class BirthDeathWithSuperSpreadingModel(Model):
 
 
 class PNModel(Model):
-    def __init__(self, model, removal_rate=np.inf, pn=0.5, *args, **kwargs):
+    def __init__(self, model, partner_removal_rate=np.inf, upsilon=0.5, *args, **kwargs):
         transition_rates = np.pad(model.transition_rates, ((0, model.transition_rates.shape[0]),
                                                            (0, model.transition_rates.shape[1])),
                                   mode='constant', constant_values=0)
@@ -260,12 +260,12 @@ class PNModel(Model):
                        transition_rates=transition_rates,
                        transmission_rates=transmission_rates,
                        removal_rates=np.pad(model.removal_rates, (0, model.removal_rates.shape[0]),
-                                            mode='constant', constant_values=removal_rate),
+                                            mode='constant', constant_values=partner_removal_rate),
                        ps=np.pad(model.ps, (0, model.ps.shape[0]), mode='constant', constant_values=1),
                        state_frequencies=np.pad(model.state_frequencies, (0, model.state_frequencies.shape[0]),
                                                 mode='constant', constant_values=0),
                        *args, **kwargs)
-        self.__pn = pn
+        self.__pn = upsilon
         self.check_p()
         self.model = model
 

@@ -51,8 +51,10 @@ def main():
                         help="sampling probability array, in the same order as model states, "
                              "e.g. if a model has 2 states given as --states E I,"
                              "then here we expect p(E) p(I).")
-    parser.add_argument('--pn', required=False, default=0, type=float, help='notification probability')
-    parser.add_argument('--partner_psi', required=False, default=0, type=float, help='partner removal rate')
+    parser.add_argument('--upsilon', required=False, default=0, type=float, help='notification probability')
+    parser.add_argument('--phi', required=False, default=0, type=float, help='partner removal rate')
+    parser.add_argument('--max_notified_partners', required=False, default=1, type=int,
+                        help='maximum number of notified partners per person')
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
@@ -71,19 +73,22 @@ def main():
         '\ttransition_rates=\n{}\n'
         '\ttransmission_rates=\n{}\n'
         '\tremoval_rates={}\n'
-        '\tsampling probabilities={}'.format(transition_rates, transmission_rates, params.removal_rates, params.sampling_probabilities))
+        '\tsampling probabilities={}'.format(transition_rates, transmission_rates, params.removal_rates,
+                                             params.sampling_probabilities))
     logging.info('Total time T={}'.format(params.T))
 
     model = Model(states=params.states,
                   transmission_rates=transmission_rates,
                   transition_rates=transition_rates,
                   removal_rates=params.removal_rates, ps=params.sampling_probabilities)
-    if params.pn and params.pn > 0:
-        model = PNModel(model=model, pn=params.pn, removal_rate=params.partner_psi)
+    if params.upsilon and params.upsilon > 0:
+        logging.info('PN model parameters are:\n\tphi={}\n\tupsilon={}'.format(params.phi, params.upsilon))
+        model = PNModel(model=model, upsilon=params.upsilon, partner_removal_rate=params.phi)
 
     logging.getLogger().setLevel(level=logging.DEBUG if params.verbose else logging.ERROR)
 
-    forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T)
+    forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T,
+                                               max_notified_partners=params.max_notified_partners)
 
     save_forest(forest, params.nwk)
     save_log(model, total_tips, T, u, params.log)

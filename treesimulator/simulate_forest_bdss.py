@@ -40,8 +40,10 @@ def main():
     parser.add_argument('--la_ns', required=True, type=float, help="normalspreader-to-superspreader transmission rate")
     parser.add_argument('--psi', required=True, type=float, help="removal rate")
     parser.add_argument('--p', required=True, type=float, help='sampling probability')
-    parser.add_argument('--pn', required=False, default=0, type=float, help='notification probability')
-    parser.add_argument('--partner_psi', required=False, default=0, type=float, help='partner removal rate')
+    parser.add_argument('--upsilon', required=False, default=0, type=float, help='notification probability')
+    parser.add_argument('--phi', required=False, default=0, type=float, help='partner removal rate')
+    parser.add_argument('--max_notified_partners', required=False, default=1, type=int,
+                        help='maximum number of notified partners per person')
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
@@ -56,11 +58,12 @@ def main():
     model = BirthDeathWithSuperSpreadingModel(p=params.p,
                                               la_ss=params.la_ss, la_sn=params.la_sn,
                                               la_ns=params.la_ns, la_nn=params.la_nn, psi=params.psi)
-    if params.pn and params.pn > 0:
-        logging.info('PN model parameters are:\n\tpsi_n={}\n\tp_n={}'.format(params.partner_psi, params.pn))
-        model = PNModel(model=model, pn=params.pn, removal_rate=params.partner_psi)
+    if params.upsilon and params.upsilon > 0:
+        logging.info('PN model parameters are:\n\tphi={}\n\tupsilon={}'.format(params.phi, params.upsilon))
+        model = PNModel(model=model, upsilon=params.upsilon, partner_removal_rate=params.phi)
 
-    forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T)
+    forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T,
+                                               max_notified_partners=params.max_notified_partners)
 
     save_forest(forest, params.nwk)
     save_log(model, total_tips, T, u, params.log)
