@@ -13,8 +13,10 @@ TRANSITION = 'transition'
 class Model(object):
 
     def __init__(self, states=None,
-                 transition_rates=None, transmission_rates=None, removal_rates=None, ps=None, *args, **kwargs):
-        super(Model, self).__init__()
+                 transition_rates=None, transmission_rates=None, removal_rates=None, ps=None,
+                 state_frequencies=None,
+                 *args, **kwargs):
+        self.__pis = None
         self.__states = np.array(states)
         num_states = len(self.states)
         self.__ps = np.array(ps) if ps is not None else np.ones(num_states, dtype=float)
@@ -25,6 +27,9 @@ class Model(object):
         self.__removal_rates = np.array(removal_rates) if removal_rates is not None \
             else np.zeros(shape=num_states, dtype=np.float64)
         self.check_rates()
+        if state_frequencies is not None:
+            self.__pis = np.array(state_frequencies)
+            self.check_frequencies()
 
     def clone(self):
         return Model(self.states, self.transition_rates, self.transmission_rates, self.removal_rates, self.ps)
@@ -43,21 +48,37 @@ class Model(object):
 
     @property
     def state_frequencies(self):
-        MU, LA, PSI = self.transition_rates, self.transmission_rates, self.removal_rates
-        m = len(self.states)
+        if self.__pis is None:
+            MU, LA, PSI = self.transition_rates, self.transmission_rates, self.removal_rates
+            m = len(self.states)
 
-        def func(PI):
-            SIGMA = PI.dot(LA.sum(axis=1) - PSI)
-            res = [PI.sum() - 1]
-            for k in range(m - 1):
-                pi_k = PI[k]
-                res.append(pi_k * SIGMA + pi_k * (PSI[k] + MU[k, :].sum()) - PI.dot(MU[:, k] + LA[:, k]))
-            return res
+            def func(PI):
+                SIGMA = PI.dot(LA.sum(axis=1) - PSI)
+                res = [PI.sum() - 1]
+                for k in range(m - 1):
+                    pi_k = PI[k]
+                    res.append(pi_k * SIGMA + pi_k * (PSI[k] + MU[k, :].sum()) - PI.dot(MU[:, k] + LA[:, k]))
+                return res
 
-        PI = fsolve(func, np.ones(m) / m)
-        if np.any(PI < 0) or np.any(PI > 1):
-            return np.ones(m) / m
-        return PI
+            self.__pis = fsolve(func, np.ones(m) / m)
+            try:
+                self.check_frequencies()
+            except ValueError:
+                self.__pis = np.ones(m) / m
+        return self.__pis
+
+    def check_frequencies(self):
+        if np.any(self.__pis < 0):
+            raise ValueError('Equilibrium frequencies cannot be negative')
+        if np.any(self.__pis > 1):
+            raise ValueError('Equilibrium frequencies cannot be greater than one')
+        if np.round(self.__pis.sum(), 2) != 1:
+            raise ValueError('Equilibrium frequencies must sum up to one')
+
+    @state_frequencies.setter
+    def state_frequencies(self, pis):
+        self.__pis = np.array(pis)
+        self.check_frequencies()
 
     @property
     def transition_rates(self):
@@ -256,14 +277,14 @@ class PNModel(Model):
         transmission_rates[model.transmission_rates.shape[0]:, model.transmission_rates.shape[1]:] \
             = model.transmission_rates
 
+        pis = np.pad(model.state_frequencies, (0, model.state_frequencies.shape[0]), mode='constant', constant_values=0)
         Model.__init__(self, states=[_ for _ in model.states] + ['{}n'.format(_) for _ in model.states],
                        transition_rates=transition_rates,
                        transmission_rates=transmission_rates,
                        removal_rates=np.pad(model.removal_rates, (0, model.removal_rates.shape[0]),
                                             mode='constant', constant_values=partner_removal_rate),
                        ps=np.pad(model.ps, (0, model.ps.shape[0]), mode='constant', constant_values=1),
-                       state_frequencies=np.pad(model.state_frequencies, (0, model.state_frequencies.shape[0]),
-                                                mode='constant', constant_values=0),
+                       state_frequencies=pis,
                        *args, **kwargs)
         self.__pn = upsilon
         self.check_p()
@@ -273,7 +294,7 @@ class PNModel(Model):
         return PNModel(self.model, self.removal_rates[-1], self.__pn)
 
     @property
-    def pn(self):
+    def upsilon(self):
         return self.__pn
 
     @property
@@ -294,6 +315,6 @@ class PNModel(Model):
 
     def get_epidemiological_parameters(self):
         res = self.model.get_epidemiological_parameters()
-        res['notification probability'] = self.pn
+        res['notification probability'] = self.upsilon
         res['removal time after notification'] = 1 / self.removal_rates[-1]
         return res

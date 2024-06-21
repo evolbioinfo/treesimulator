@@ -46,7 +46,7 @@ def main():
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
     params = parser.parse_args()
     logging.getLogger().handlers = []
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
     logging.info('BD model parameters are:\n\tlambda={}\n\tpsi={}\n\tp={}'.format(params.la, params.psi, params.p))
     logging.info('Total time T={}'.format(params.T))
