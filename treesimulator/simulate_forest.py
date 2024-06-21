@@ -62,7 +62,8 @@ def main():
                         help="print information on the progress of the tree generation (to console)")
     params = parser.parse_args()
     logging.getLogger().handlers = []
-    logging.basicConfig(level=logging.INFO, format='%(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(level=logging.DEBUG if params.verbose else logging.INFO,
+                        format='%(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
     n_states = len(params.states)
     transition_rates = np.array(params.transition_rates).reshape((n_states, n_states))
@@ -84,8 +85,6 @@ def main():
     if params.upsilon and params.upsilon > 0:
         logging.info('PN model parameters are:\n\tphi={}\n\tupsilon={}'.format(params.phi, params.upsilon))
         model = PNModel(model=model, upsilon=params.upsilon, partner_removal_rate=params.phi)
-
-    logging.getLogger().setLevel(level=logging.DEBUG if params.verbose else logging.ERROR)
 
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T,
                                                max_notified_partners=params.max_notified_partners)

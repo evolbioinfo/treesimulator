@@ -44,9 +44,11 @@ def main():
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help="describe generation process")
     params = parser.parse_args()
     logging.getLogger().handlers = []
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(level=logging.DEBUG if params.verbose else logging.INFO,
+                        format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
     logging.info('BD model parameters are:\n\tlambda={}\n\tpsi={}\n\tp={}'.format(params.la, params.psi, params.p))
     logging.info('Total time T={}'.format(params.T))
