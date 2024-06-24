@@ -274,7 +274,7 @@ class PNModel(Model):
         transmission_rates = np.pad(model.transmission_rates, ((0, model.transmission_rates.shape[0]),
                                                                (0, model.transmission_rates.shape[1])),
                                     mode='constant', constant_values=0)
-        transmission_rates[model.transmission_rates.shape[0]:, model.transmission_rates.shape[1]:] \
+        transmission_rates[model.transmission_rates.shape[0]:, :model.transmission_rates.shape[1]] \
             = model.transmission_rates
 
         pis = np.pad(model.state_frequencies, (0, model.state_frequencies.shape[0]), mode='constant', constant_values=0)
