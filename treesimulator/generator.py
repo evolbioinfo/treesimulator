@@ -161,6 +161,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                             if removed_id != donor_id:
                                 # means this is the last partner this node has
                                 partner_n = 0
+                            else:
+                                removed_id = parent_id
                             # If the notifier agrees and the partner is not yet removed, notify them
                             if np.random.uniform(0, 1, 1)[0] < model.upsilon and partner_id not in id2time:
                                 unnotified_partner_i = id2state[partner_id[0]]
