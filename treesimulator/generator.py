@@ -51,7 +51,7 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
     id2current_id = {0: 0}
     id2state = {0: root_state}
 
-    # logging.info('Aiming for at most {} sampled cases over time {}'.format(max_sampled, max_time))
+    logging.debug('Aiming for at most {} sampled cases over time {}'.format(max_sampled, max_time))
 
     target_sampled = np.round(np.random.uniform(low=min_sampled, high=max_sampled, size=1)[0], 0)
 
@@ -279,7 +279,7 @@ def generate_forest(model, max_time=np.inf, min_tips=1000, max_sampled=np.inf, k
     res_ltt = None
     while total_n_tips < min_tips:
         if ltt:
-            tree, cur_ltt, _ = simulate_tree_gillespie(model, max_time=max_time, max_sampled=max_sampled, ltt=True,
+            tree, cur_ltt, _ = simulate_tree_gillespie(model, max_time=max_time, ltt=True,
                                                        state_feature=state_feature, state_frequencies=state_frequencies,
                                                        max_notified_partners=max_notified_partners)
             if res_ltt is None:
@@ -296,7 +296,7 @@ def generate_forest(model, max_time=np.inf, min_tips=1000, max_sampled=np.inf, k
                         prev_res = res_ltt[time]
                     res_ltt[time] = total
         else:
-            tree, _ = simulate_tree_gillespie(model, max_time=max_time, max_sampled=max_sampled,
+            tree, _ = simulate_tree_gillespie(model, max_time=max_time,
                                               state_feature=state_feature, state_frequencies=state_frequencies,
                                               max_notified_partners=max_notified_partners)
         total_trees += 1
@@ -347,7 +347,7 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None, max_no
 
     if T < np.inf:
         while True:
-            forest, ltt = generate_forest(model, max_time=T, min_tips=min_tips,
+            forest, ltt = generate_forest(model, max_time=T, min_tips=min_tips, max_sampled=max_tips,
                                           keep_nones=True, state_frequencies=state_frequencies, ltt=True,
                                           max_notified_partners=max_notified_partners)
             total_trees = len(forest)
