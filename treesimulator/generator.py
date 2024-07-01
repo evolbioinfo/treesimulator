@@ -53,7 +53,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
 
     logging.debug('Aiming for at most {} sampled cases over time {}'.format(max_sampled, max_time))
 
-    target_sampled = np.round(np.random.uniform(low=min_sampled, high=max_sampled, size=1)[0], 0)
+    target_sampled = np.round(np.random.uniform(low=min_sampled, high=max_sampled, size=1)[0], 0) \
+        if max_sampled < np.inf else np.inf
 
     while infectious_nums.sum() and sampled_nums.sum() < target_sampled and time < max_time:
         # first we need to calculate rate sum
