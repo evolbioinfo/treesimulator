@@ -1,6 +1,6 @@
 import logging
 import random
-from collections import Counter, defaultdict
+from collections import Counter
 
 import numpy as np
 from ete3 import TreeNode

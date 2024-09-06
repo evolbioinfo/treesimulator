@@ -1,7 +1,7 @@
 import os
 
 STATE = 'state'
-DIST_TO_START ='D'
+DIST_TO_START = 'D'
 TIME_TILL_NOW = 'T'
 
 
