@@ -38,7 +38,7 @@ Partner notification adds two parameters to the initial MTBD model:
 
 We pay particular interest to the classical BD model, the BD Exposed-Infectious (BDEI) model, 
 and BD with superspreading (BDSS), 
-as they are described in [[Voznica _et al._ 2021]]((https://www.biorxiv.org/content/10.1101/2021.03.11.435006v1)), and to their -PN versions.
+as they are described in [[Voznica _et al._ 2021]](https://www.biorxiv.org/content/10.1101/2021.03.11.435006v1), and to their -PN versions.
 
 
 ## BD
