@@ -2,7 +2,11 @@
 
 Simulation of rooted phylogenetic trees under a given Multitype Birth–Death (MTBD) model, with or without partner notification (PN).
 
-[//]: # ([![DOI:10.1093/sysbio/syad059]&#40;https://zenodo.org/badge/DOI/10.1093/sysbio/syad059.svg&#41;]&#40;https://doi.org/10.1093/sysbio/syad059&#41;)
+## Preprint
+
+Anna ZHUKOVA, Olivier Gascuel. Accounting for partner notification in epidemiological birth-death-models. medRxiv 2024.09.09.24313296; doi:[10.1101/2024.09.09.24313296](https://doi.org/10.1101/2024.09.09.24313296)
+
+[![DOI:10.1101/2024.09.09.24313296](https://zenodo.org/badge/DOI/10.1101/2024.09.09.24313296.svg)](https://doi.org/10.1101/2024.09.09.24313296)
 [![GitHub release](https://img.shields.io/github/v/release/evolbioinfo/treesimulator.svg)](https://github.com/evolbioinfo/treesimulator/releases)
 [![PyPI version](https://badge.fury.io/py/treesimulator.svg)](https://pypi.org/project/treesimulator/)
 [![PyPI downloads](https://shields.io/pypi/dm/treesimulator)](https://pypi.org/project/treesimulator/)
