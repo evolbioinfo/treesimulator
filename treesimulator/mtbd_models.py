@@ -15,18 +15,24 @@ class Model(object):
     def __init__(self, states=None,
                  transition_rates=None, transmission_rates=None, removal_rates=None, ps=None,
                  state_frequencies=None,
+                 n_recipients=None,
                  *args, **kwargs):
         self.__pis = None
         self.__states = np.array(states)
         num_states = len(self.states)
         self.__ps = np.array(ps) if ps is not None else np.ones(num_states, dtype=float)
+        self.check_ps()
+        self.__n_recipients = np.array(n_recipients) if n_recipients is not None else np.ones(num_states, dtype=float)
+        self.check_n_recipients()
         self.__transmission_rates = np.array(transmission_rates) if transmission_rates is not None \
             else np.zeros(shape=(num_states, num_states), dtype=np.float64)
+        self.check_transmission_rates()
         self.__transition_rates = np.array(transition_rates) if transition_rates is not None \
             else np.zeros(shape=(num_states, num_states), dtype=np.float64)
+        self.check_transition_rates()
         self.__removal_rates = np.array(removal_rates) if removal_rates is not None \
             else np.zeros(shape=num_states, dtype=np.float64)
-        self.check_rates()
+        self.check_removal_rates()
         if state_frequencies is not None:
             self.__pis = np.array(state_frequencies)
             self.check_frequencies()
@@ -41,6 +47,15 @@ class Model(object):
     @ps.setter
     def ps(self, ps):
         self.__ps = ps
+
+    @property
+    def n_recipients(self):
+        return self.__n_recipients
+
+    @n_recipients.setter
+    def n_recipients(self, n_recipients):
+        self.__n_recipients = n_recipients
+        self.check_n_recipients()
 
     @property
     def states(self):
@@ -93,6 +108,7 @@ class Model(object):
     @transition_rates.setter
     def transition_rates(self, rates):
         self.__transition_rates = rates
+        self.check_transition_rates()
 
     @property
     def transmission_rates(self):
@@ -107,6 +123,7 @@ class Model(object):
     @transmission_rates.setter
     def transmission_rates(self, rates):
         self.__transmission_rates = rates
+        self.check_transmission_rates()
 
     @property
     def removal_rates(self):
@@ -121,35 +138,58 @@ class Model(object):
     @removal_rates.setter
     def removal_rates(self, rates):
         self.__removal_rates = rates
+        self.check_removal_rates()
 
     def get_name(self):
         return 'MTBD'
 
-    def check_rates(self):
+    def check_transition_rates(self):
         n_states = len(self.states)
         if self.transition_rates.shape != (n_states, n_states):
             raise ValueError("Transition matrix shape is wrong, should be {}x{}.".format(n_states, n_states))
-        if self.transmission_rates.shape != (n_states, n_states):
-            raise ValueError("Transmission matrix shape is wrong, should be {}x{}.".format(n_states, n_states))
-        if self.removal_rates.shape != (n_states,):
-            raise ValueError("Removal rate vector length is wrong, should be {}.".format(n_states))
-        if self.ps.shape != (n_states,):
-            raise ValueError("Sampling probability vector length is wrong, should be {}.".format(n_states))
         if not np.all(self.transition_rates >= 0):
             raise ValueError("Transition rates cannot be negative")
+
+    def check_transmission_rates(self):
+        n_states = len(self.states)
+        if self.transmission_rates.shape != (n_states, n_states):
+            raise ValueError("Transmission matrix shape is wrong, should be {}x{}.".format(n_states, n_states))
         if not np.all(self.transmission_rates >= 0):
             raise ValueError("Transmission rates cannot be negative")
+
+    def check_removal_rates(self):
+        n_states = len(self.states)
+        if self.removal_rates.shape != (n_states,):
+            raise ValueError("Removal rate vector length is wrong, should be {}.".format(n_states))
         if not np.all(self.removal_rates >= 0):
             raise ValueError("Removal rates cannot be negative")
+
+    def check_ps(self):
+        n_states = len(self.states)
+        if self.ps.shape != (n_states,):
+            raise ValueError("Sampling probability vector length is wrong, should be {}.".format(n_states))
         if not np.all(self.ps >= 0):
             raise ValueError("Sampling probabilities cannot be negative")
         if not np.all(self.ps <= 1):
             raise ValueError('Sampling probabilities cannot be greater than 1')
 
+    def check_n_recipients(self):
+        n_states = len(self.states)
+        if self.n_recipients.shape != (n_states,):
+            raise ValueError("Recipient number vector length is wrong, should be {}.".format(n_states))
+        if not np.all(self.n_recipients >= 1):
+            raise ValueError('The number of recipients cannot be below 1 '
+                             '(put the transmission rate to zero to prevent transmission from a certain state)')
+
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
-        return {'transitions': self.transition_rates, 'transmissions': self.transmission_rates,
-                'removals': self.removal_rates, 'sampling': self.ps}
+        pis = self.state_frequencies
+        avg_transmission_rate = pis.dot(self.transmission_rates.sum(axis=1) * self.n_recipients)
+        avg_removal_rate = pis.dot(self.removal_rates)
+        return {'R0': avg_transmission_rate / avg_removal_rate,
+                'transition rates': self.transition_rates, 'transmission rates': self.transmission_rates,
+                'removal rates': self.removal_rates, 'sampling probabilities': self.ps,
+                'n_recipients': self.n_recipients}
 
 
 class BirthDeathExposedInfectiousModel(Model):
@@ -191,7 +231,7 @@ class BirthDeathExposedInfectiousModel(Model):
 
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
-        return {'R0': self.transmission_rates[1, 0] / self.removal_rates[1],
+        return {'R0': self.transmission_rates[1, 0] / self.removal_rates[1] * self.n_recipients[1],
                 'infectious time': 1 / self.removal_rates[1],
                 'incubation period': 1 / self.transition_rates[0, 1],
                 'sampling probability': self.ps[1]}
@@ -213,9 +253,11 @@ class BirthDeathModel(Model):
 
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
-        return {'R0': self.transmission_rates[0, 0] / self.removal_rates[0],
+        return {'R0': self.transmission_rates[0, 0] / self.removal_rates[0] * self.n_recipients[0],
                 'infectious time': 1 / self.removal_rates[0],
-                'sampling probability': self.ps[0]}
+                'sampling probability': self.ps[0],
+                'transmission rate': self.transmission_rates[0, 0],
+                'removal rate': self.removal_rates[0]}
 
 
 class BirthDeathWithSuperSpreadingModel(Model):
@@ -256,12 +298,16 @@ class BirthDeathWithSuperSpreadingModel(Model):
 
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
-        return {'R0': (self.transmission_rates[0, 0] + self.transmission_rates[1, 1]) / self.removal_rates[0],
+        pis = self.state_frequencies
+        # R0 could also be expressed
+        # as (self.transmission_rates[0, 0] + self.transmission_rates[1, 1]) / self.removal_rates[0]
+        # in cases with 1 recipient
+        # (it gives the same result due to constraints)
+        return {'R0': (pis.dot(self.transmission_rates.sum(axis=1)) * self.n_recipients) / self.removal_rates[0],
                 'infectious time': 1 / self.removal_rates[1],
                 'sampling probability': self.ps[1],
                 'superspreading transmission ratio': self.transmission_rates[1, 1] / self.transmission_rates[0, 1],
-                'superspreading fraction':
-                    self.transmission_rates[1, 1] / (self.transmission_rates[1, 1] + self.transmission_rates[1, 0])}
+                'superspreading fraction': pis[-1]}
 
 
 class PNModel(Model):
@@ -276,7 +322,6 @@ class PNModel(Model):
                                     mode='constant', constant_values=0)
         transmission_rates[model.transmission_rates.shape[0]:, :model.transmission_rates.shape[1]] \
             = model.transmission_rates
-
         pis = np.pad(model.state_frequencies, (0, model.state_frequencies.shape[0]), mode='constant', constant_values=0)
         Model.__init__(self, states=[_ for _ in model.states] + ['{}n'.format(_) for _ in model.states],
                        transition_rates=transition_rates,
@@ -284,18 +329,19 @@ class PNModel(Model):
                        removal_rates=np.pad(model.removal_rates, (0, model.removal_rates.shape[0]),
                                             mode='constant', constant_values=partner_removal_rate),
                        ps=np.pad(model.ps, (0, model.ps.shape[0]), mode='constant', constant_values=1),
+                       n_recipients=np.concatenate([model.n_recipients, model.n_recipients]),
                        state_frequencies=pis,
                        *args, **kwargs)
-        self.__pn = upsilon
-        self.check_p()
+        self.__upsilon = upsilon
+        self.check_upsilon()
         self.model = model
 
     def clone(self):
-        return PNModel(self.model, self.removal_rates[-1], self.__pn)
+        return PNModel(self.model, self.removal_rates[-1], self.__upsilon)
 
     @property
     def upsilon(self):
-        return self.__pn
+        return self.__upsilon
 
     @property
     def partner_removal_rate(self):
@@ -310,8 +356,8 @@ class PNModel(Model):
     def get_name(self):
         return self.model.get_name() + '-PN'
 
-    def check_p(self):
-        assert (0 <= self.__pn <= 1)
+    def check_upsilon(self):
+        assert (0 <= self.__upsilon <= 1)
 
     def get_epidemiological_parameters(self):
         res = self.model.get_epidemiological_parameters()

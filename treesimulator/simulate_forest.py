@@ -55,6 +55,11 @@ def main():
     parser.add_argument('--phi', required=False, default=0, type=float, help='partner removal rate')
     parser.add_argument('--max_notified_partners', required=False, default=1, type=int,
                         help='maximum number of notified partners per person')
+    parser.add_argument('--avg_recipients', nargs='*', type=float,
+                        help='average number of recipients per transmission '
+                             'for each donor state (in the same order as the model states). '
+                             'By default, only one-to-one transmissions are allowed, '
+                             'but if larger numbers are given then one-to-many transmissions become possible.')
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
@@ -68,23 +73,30 @@ def main():
     n_states = len(params.states)
     transition_rates = np.array(params.transition_rates).reshape((n_states, n_states))
     transmission_rates = np.array(params.transmission_rates).reshape((n_states, n_states))
+    if not params.avg_recipients:
+        params.avg_recipients = [1] * n_states
 
+    is_mult = np.any(np.array(params.avg_recipients) != 1)
     logging.info(
-        'MTBD model parameters are:\n'
+        'MTBD{} model parameters are:\n'
         '\ttransition_rates=\n{}\n'
         '\ttransmission_rates=\n{}\n'
         '\tremoval_rates={}\n'
-        '\tsampling probabilities={}'.format(transition_rates, transmission_rates, params.removal_rates,
-                                             params.sampling_probabilities))
-    logging.info('Total time T={}'.format(params.T))
-
+        '\tsampling probabilities={}{}'
+        .format('-MULT' if is_mult else '',
+                transition_rates, transmission_rates, params.removal_rates,
+                params.sampling_probabilities,
+                '\n\tavg_recipient_numbers={}'.format(params.avg_recipients) if is_mult else ''))
     model = Model(states=params.states,
                   transmission_rates=transmission_rates,
                   transition_rates=transition_rates,
                   removal_rates=params.removal_rates, ps=params.sampling_probabilities)
     if params.upsilon and params.upsilon > 0:
-        logging.info('PN model parameters are:\n\tphi={}\n\tupsilon={}'.format(params.phi, params.upsilon))
+        logging.info('PN parameters are:\n\tphi={}\n\tupsilon={}'.format(params.phi, params.upsilon))
         model = PNModel(model=model, upsilon=params.upsilon, partner_removal_rate=params.phi)
+
+    if params.T < np.inf:
+        logging.info('Total time T={}'.format(params.T))
 
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T,
                                                max_notified_partners=params.max_notified_partners)

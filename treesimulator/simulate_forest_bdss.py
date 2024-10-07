@@ -44,6 +44,11 @@ def main():
     parser.add_argument('--phi', required=False, default=0, type=float, help='partner removal rate')
     parser.add_argument('--max_notified_partners', required=False, default=1, type=int,
                         help='maximum number of notified partners per person')
+    parser.add_argument('--avg_recipients', nargs=2, default=[1, 1], type=float,
+                        help='average number of recipients per transmission '
+                             'for each donor state (normal spreader, superspreader). '
+                             'By default one and one (one-to-one transmissions independently of the donor state), '
+                             'but if larger numbers are given then one-to-many transmissions become possible.')
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
@@ -53,16 +58,21 @@ def main():
     logging.basicConfig(level=logging.DEBUG if params.verbose else logging.INFO,
                         format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
-    logging.info('BDSS model parameters are:\n\tla_ss={}\n\tla_sn={}\n\tla_ns={}\n\tla_nn={}\n\tpsi={}\n\tp={}'
-                 .format(params.la_ss, params.la_sn, params.la_ns, params.la_nn, params.psi, params.p))
-    logging.info('Total time T={}'.format(params.T))
-
-    model = BirthDeathWithSuperSpreadingModel(p=params.p,
+    is_mult = np.any(np.array(params.avg_recipients) != 1)
+    logging.info('BDSS{} model parameters are:\n\tla_nn={}\n\tla_ns={}\n\tla_sn={}\n\tla_ss={}\n\tpsi={}\n\tp={}{}'
+                 .format('-MULT' if is_mult else '',
+                         params.la_nn, params.la_ns, params.la_sn, params.la_ss, params.psi, params.p,
+                         '\n\tr_n={}\tr_s={}'.format(*params.avg_recipients) if is_mult else ''))
+    model = BirthDeathWithSuperSpreadingModel(la_nn=params.la_nn, la_ns=params.la_ns,
                                               la_ss=params.la_ss, la_sn=params.la_sn,
-                                              la_ns=params.la_ns, la_nn=params.la_nn, psi=params.psi)
+                                              psi=params.psi, p=params.p,
+                                              n_recipients=params.avg_recipients)
     if params.upsilon and params.upsilon > 0:
-        logging.info('PN model parameters are:\n\tphi={}\n\tupsilon={}'.format(params.phi, params.upsilon))
+        logging.info('PN parameters are:\n\tphi={}\n\tupsilon={}'.format(params.phi, params.upsilon))
         model = PNModel(model=model, upsilon=params.upsilon, partner_removal_rate=params.phi)
+
+    if params.T < np.inf:
+        logging.info('Total time T={}'.format(params.T))
 
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T,
                                                max_notified_partners=params.max_notified_partners)

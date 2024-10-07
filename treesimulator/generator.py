@@ -3,10 +3,16 @@ import random
 from collections import Counter
 
 import numpy as np
+import scipy
 from ete3 import TreeNode
 
 from treesimulator import STATE, DIST_TO_START, TIME_TILL_NOW
 from treesimulator.mtbd_models import PNModel
+
+TRANSITION = 0
+TRANSMISSION = 1
+REMOVAL = 2
+EVENT_TYPES = np.array([TRANSITION, TRANSMISSION, REMOVAL])
 
 
 def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=np.inf,
@@ -34,7 +40,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
     num_states = len(model.states)
     if state_frequencies is None:
         state_frequencies = model.state_frequencies
-    root_state = np.random.choice(np.arange(num_states), size=1, p=state_frequencies)[0]
+    state_indices = np.arange(num_states)
+    root_state = np.random.choice(state_indices, size=1, p=state_frequencies)[0]
     # evolve till the time is up, following Gillespie
     time = 0
     infectious_nums = np.zeros(num_states, dtype=np.int64)
@@ -56,15 +63,18 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
     target_sampled = np.round(np.random.uniform(low=min_sampled, high=max_sampled, size=1)[0], 0) \
         if max_sampled < np.inf else np.inf
 
+    num_states_squared = np.power(num_states, 2)
+    rate_vector = np.concatenate([model.transition_rates.reshape(num_states_squared),
+                                  model.transmission_rates.reshape(num_states_squared),
+                                  model.removal_rates])
+    index_vector = np.arange(rate_vector.shape[0])
+    transmission_probs = model.transmission_rates / model.transmission_rates.sum(axis=1).reshape((num_states, 1))
+
     while infectious_nums.sum() and sampled_nums.sum() < target_sampled and time < max_time:
-        # first we need to calculate rate sum
-        transmission_rate_sums = model.transmission_rates.sum(axis=1) * infectious_nums
-        transition_rate_sums = model.transition_rates.sum(axis=1) * infectious_nums
-        removal_rate_sums = model.removal_rates * infectious_nums
-        total_transmission_rate = transmission_rate_sums.sum()
-        total_transition_rate = transition_rate_sums.sum()
-        total_removal_rate = removal_rate_sums.sum()
-        total_rate = total_transmission_rate + total_transition_rate + total_removal_rate
+        infectious_num_vector = np.concatenate([np.tile(infectious_nums.reshape((num_states, 1)), (2, num_states))
+                                               .reshape(num_states_squared * 2), infectious_nums])
+        total_rate_vector = rate_vector * infectious_num_vector
+        total_rate = total_rate_vector.sum()
 
         # check if we passed the time limit
         time += np.random.exponential(1 / total_rate, 1)[0]
@@ -73,104 +83,99 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
             break
 
         # now let us see which event will happen
-        random_event = np.random.uniform(low=0, high=total_rate, size=1)[0]
-
+        random_event_index = np.random.choice(index_vector, p=total_rate_vector / total_rate_vector.sum(),
+                                              replace=False, size=1)[0]
         # case 1: state transition
-        if random_event < total_transition_rate:
-            for i in range(num_states):
-                if random_event < transition_rate_sums[i]:
-                    random_event /= infectious_nums[i]
-                    infectious_nums[i] -= 1
-                    for j in range(num_states):
-                        if random_event < model.transition_rates[i, j]:
-                            infectious_nums[j] += 1
-                            state_changing_id = random_pop(infectious_state2id[i])
-                            id2state[state_changing_id[0]] = j
-                            infectious_state2id[j].add(state_changing_id)
-                            logging.debug('Time {}:\t{} changed state from {} to {}'
-                                          .format(time, state_changing_id, model.states[i], model.states[j]))
-                            break
-                        random_event -= model.transition_rates[i, j]
-                    break
-                random_event -= transition_rate_sums[i]
+        if random_event_index < num_states_squared:
+            i, j = random_event_index // num_states, random_event_index % num_states
+            infectious_nums[i] -= 1
+            infectious_nums[j] += 1
+            state_changing_id = random_pop(infectious_state2id[i])
+            id2state[state_changing_id[0]] = j
+            infectious_state2id[j].add(state_changing_id)
+            logging.debug('Time {}:\t{} changed state from {} to {}'
+                          .format(time, state_changing_id, model.states[i], model.states[j]))
+
             continue
-        random_event -= total_transition_rate
+        random_event_index -= num_states_squared
 
         # case 2: transmission
-        if random_event < total_transmission_rate:
-            for i in range(num_states):
-                if random_event < transmission_rate_sums[i]:
-                    random_event /= infectious_nums[i]
-                    for j in range(num_states):
-                        if random_event < model.transmission_rates[i, j]:
-                            infectious_nums[j] += 1
-                            cur_id = cur_id[0] + 1, 0
-                            id2current_id[cur_id[0]] = 0
-                            id2state[cur_id[0]] = j
-                            parent_id = random_pop(infectious_state2id[i])
-                            donor_id = parent_id[0], parent_id[1] + 1
-                            id2current_id[donor_id[0]] = donor_id[1]
-                            donor_id2recipient_id[parent_id] = cur_id
-                            infectious_state2id[i].add(donor_id)
-                            infectious_state2id[j].add(cur_id)
-                            id2parent_id[cur_id] = parent_id
-                            id2parent_id[donor_id] = parent_id
-                            id2time[parent_id] = time
-                            logging.debug('Time {}:\t{} in state {} transmitted to {} in state {}'
-                                          .format(time, parent_id, model.states[i], cur_id, model.states[j]))
-                            break
-                        random_event -= model.transmission_rates[i, j]
-                    break
-                random_event -= transmission_rate_sums[i]
+        if random_event_index < num_states_squared:
+            i, js = random_event_index // num_states, [random_event_index % num_states]
+            if model.n_recipients[i] > 1:
+                extra_recipients = scipy.stats.poisson.rvs(model.n_recipients[i] - 1, size=1)[0]
+                if extra_recipients:
+                    js.extend(np.random.choice(state_indices, p=transmission_probs[i, :], replace=True,
+                                               size=extra_recipients))
+            parent_id = random_pop(infectious_state2id[i])
+            id2time[parent_id] = time
+            donor_id = parent_id[0], parent_id[1] + 1
+            id2current_id[donor_id[0]] = donor_id[1]
+            infectious_state2id[i].add(donor_id)
+            id2parent_id[donor_id] = parent_id
+
+            recipient_ids = []
+            for j in js:
+                infectious_nums[j] += 1
+                cur_id = cur_id[0] + 1, 0
+                id2current_id[cur_id[0]] = 0
+                id2state[cur_id[0]] = j
+                infectious_state2id[j].add(cur_id)
+                id2parent_id[cur_id] = parent_id
+                recipient_ids.append(cur_id)
+            donor_id2recipient_id[parent_id] = recipient_ids
+            logging.debug('Time {}:\t{} in state {} transmitted to {} in state(s) {}'
+                          .format(time, parent_id, model.states[i], recipient_ids, [model.states[j] for j in js]))
             continue
-        random_event -= total_transmission_rate
+        random_event_index -= num_states_squared
 
         # case 3: removal
-        for i in range(num_states):
-            if random_event < removal_rate_sums[i]:
-                infectious_nums[i] -= 1
+        i = random_event_index
+        infectious_nums[i] -= 1
+        removed_id = random_pop(infectious_state2id[i])
+        id2time[removed_id] = time
+        msg = 'Time {}:\t{} in state {} got removed'.format(time, removed_id, model.states[i])
 
-                removed_id = random_pop(infectious_state2id[i])
-                id2time[removed_id] = time
-                msg = 'Time {}:\t{} in state {} got removed'.format(time, removed_id, model.states[i])
+        if np.random.uniform(0, 1, 1)[0] < model.ps[i]:
+            sampled_id2state[removed_id] = model.states[i]
+            sampled_nums[i] += 1
+            msg += ' and sampled'
 
-                if np.random.uniform(0, 1, 1)[0] < model.ps[i]:
-                    sampled_id2state[removed_id] = model.states[i]
-                    sampled_nums[i] += 1
-                    msg += ' and sampled'
-
-                    # partner notification
-                    if isinstance(model, PNModel):
-                        partner_n = max_notified_partners
-                        # if the max number of notified partners per person allows and it is not the root
-                        while partner_n > 0 and removed_id in id2parent_id:
-                            partner_n -= 1
-                            parent_id = id2parent_id[removed_id]
-                            donor_id = (parent_id[0], parent_id[1] + 1)
-                            partner_id = donor_id2recipient_id[parent_id] if removed_id == donor_id else donor_id
-                            partner_id = partner_id[0], id2current_id[partner_id[0]]
-                            if removed_id != donor_id:
-                                # means this is the last partner this node has
-                                partner_n = 0
-                            else:
-                                removed_id = parent_id
-                            # If the notifier agrees and the partner is not yet removed, notify them
-                            if np.random.uniform(0, 1, 1)[0] < model.upsilon and partner_id not in id2time:
-                                unnotified_partner_i = id2state[partner_id[0]]
-                                # The ids are organised as follows: s1, s2, ..., sm, s1-n, s2-n, ..., sm-n
-                                # Hence if we have an id >= m then the partner was already notified by someone else
-                                if unnotified_partner_i < num_states // 2:
-                                    notified_partner_i = num_states // 2 + unnotified_partner_i
-                                    id2state[partner_id[0]] = notified_partner_i
-                                    infectious_state2id[unnotified_partner_i].remove(partner_id)
-                                    infectious_state2id[notified_partner_i].add(partner_id)
-                                    infectious_nums[unnotified_partner_i] -= 1
-                                    infectious_nums[notified_partner_i] += 1
-                                msg += ' and notified {} in state {}' \
-                                    .format(partner_id, model.states[unnotified_partner_i])
-                logging.debug(msg)
-                break
-            random_event -= removal_rate_sums[i]
+            # partner notification
+            if isinstance(model, PNModel):
+                partner_n = max_notified_partners
+                # if the max number of notified partners per person allows and it is not the root
+                while partner_n > 0 and removed_id in id2parent_id:
+                    parent_id = id2parent_id[removed_id]
+                    donor_id = (parent_id[0], parent_id[1] + 1)
+                    partner_ids = donor_id2recipient_id[parent_id] if removed_id == donor_id else [donor_id]
+                    partner_ids = [partner_ids[_]
+                                   for _ in np.random.choice(np.arange(len(partner_ids)), replace=False,
+                                                             size=min(len(partner_ids), partner_n))]
+                    partner_n -= len(partner_ids)
+                    for partner_id in partner_ids:
+                        partner_id = partner_id[0], id2current_id[partner_id[0]]
+                        if removed_id != donor_id:
+                            # means this is the last partner this node has
+                            partner_n = 0
+                        else:
+                            removed_id = parent_id
+                        # If the notifier agrees and the partner is not yet removed, notify them
+                        if (np.random.uniform(0, 1, 1)[0] < model.upsilon
+                                and partner_id not in id2time):
+                            unnotified_partner_i = id2state[partner_id[0]]
+                            # The ids are organised as follows: s1, s2, ..., sm, s1-n, s2-n, ..., sm-n
+                            # Hence if we have an id >= m then the partner was already notified by someone else
+                            if unnotified_partner_i < num_states // 2:
+                                notified_partner_i = num_states // 2 + unnotified_partner_i
+                                id2state[partner_id[0]] = notified_partner_i
+                                infectious_state2id[unnotified_partner_i].remove(partner_id)
+                                infectious_state2id[notified_partner_i].add(partner_id)
+                                infectious_nums[unnotified_partner_i] -= 1
+                                infectious_nums[notified_partner_i] += 1
+                            msg += ' and notified {} in state {}' \
+                                .format(partner_id, model.states[unnotified_partner_i])
+        logging.debug(msg)
 
     if max_time == np.inf:
         max_time = time
@@ -271,7 +276,7 @@ def random_pop(elements):
     return element
 
 
-def generate_forest(model, max_time=np.inf, min_tips=1000, max_sampled=np.inf, keep_nones=False, state_feature=STATE,
+def generate_forest(model, max_time=np.inf, min_tips=1000, keep_nones=False, state_feature=STATE,
                     state_frequencies=None, ltt=False, max_notified_partners=1):
     total_n_tips = 0
     forest = []
@@ -357,10 +362,10 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None, max_no
             u = total_trees - fl
             total_tips = sum(len(list(t.iter_leaves())) for t in forest)
             if total_tips <= max_tips:
-                logging.info('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time {}.'
+                logging.info('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time T={}.'
                              .format(fl, u, total_tips, T))
                 return forest, (total_tips, u, T), ltt
-            logging.debug('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time {}.'
+            logging.debug('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time T={}.'
                           .format(fl, u, total_tips, T))
     else:
         while True:
@@ -370,6 +375,6 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None, max_no
                                                           max_notified_partners=max_notified_partners)
             total_tips = len(tree) if tree else 0
             if total_tips >= min_tips:
-                logging.info('Generated a tree with {} sampled tips over time {}.'.format(total_tips, max_time))
+                logging.info('Generated a tree with {} sampled tips over time T={}.'.format(total_tips, max_time))
                 return [tree], (total_tips, 0, max_time), ltt
-            logging.debug('Generated a tree with {} sampled tips over time {}.'.format(total_tips, max_time))
+            logging.debug('Generated a tree with {} sampled tips over time T={}.'.format(total_tips, max_time))
