@@ -253,11 +253,14 @@ class BirthDeathModel(Model):
 
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
-        return {'R0': self.transmission_rates[0, 0] / self.removal_rates[0] * self.n_recipients[0],
+        result = {'R0': self.transmission_rates[0, 0] / self.removal_rates[0] * self.n_recipients[0],
                 'infectious time': 1 / self.removal_rates[0],
                 'sampling probability': self.ps[0],
                 'transmission rate': self.transmission_rates[0, 0],
                 'removal rate': self.removal_rates[0]}
+        if self.n_recipients[0] > 1:
+            result['avg recipient number per transmission'] = self.n_recipients[0]
+        return result
 
 
 class BirthDeathWithSuperSpreadingModel(Model):
@@ -277,7 +280,7 @@ class BirthDeathWithSuperSpreadingModel(Model):
         if np.abs(s_ratio - n_ratio) > 1e-3:
             raise ValueError(
                 'transmission ratio constraint is violated: la_ss / la_ns ({}) must be equal to la_sn / la_nn ({})'
-                    .format(s_ratio, n_ratio))
+                .format(s_ratio, n_ratio))
         las[0, 0] = la_nn
         las[0, 1] = la_ns
         las[1, 0] = la_sn
@@ -303,15 +306,33 @@ class BirthDeathWithSuperSpreadingModel(Model):
         # as (self.transmission_rates[0, 0] + self.transmission_rates[1, 1]) / self.removal_rates[0]
         # in cases with 1 recipient
         # (it gives the same result due to constraints)
-        return {'R0': (pis.dot(self.transmission_rates.sum(axis=1)) * self.n_recipients) / self.removal_rates[0],
-                'infectious time': 1 / self.removal_rates[1],
-                'sampling probability': self.ps[1],
-                'superspreading transmission ratio': self.transmission_rates[1, 1] / self.transmission_rates[0, 1],
-                'superspreading fraction': pis[-1]}
+        result = {'R0': pis.dot(self.transmission_rates.sum(axis=1) * self.n_recipients) / self.removal_rates[0],
+                  'infectious time': 1 / self.removal_rates[0],
+                  'sampling probability': self.ps[1],
+                  'superspreading transmission ratio': self.transmission_rates[1, 1] / self.transmission_rates[0, 1],
+                  'superspreading fraction': pis[-1],
+                  'transmission rate normal to normal spreader': self.transmission_rates[0, 0],
+                  'transmission rate normal to superspreader': self.transmission_rates[0, 1],
+                  'transmission rate super to normal spreader': self.transmission_rates[1, 0],
+                  'transmission rate super to superspreader': self.transmission_rates[1, 1],
+                  'removal rate': self.removal_rates[0]
+        }
+        if np.any(self.n_recipients > 1):
+            result.update({'avg recipient number per transmission from normal spreader': self.n_recipients[0],
+                           'avg recipient number per transmission from superspreader': self.n_recipients[1],
+                           'avg recipient number per transmission': self.n_recipients.dot(pis),
+                           })
+        return result
 
 
-class PNModel(Model):
-    def __init__(self, model, partner_removal_rate=np.inf, upsilon=0.5, *args, **kwargs):
+class CTModel(Model):
+    """
+    Contact-tracing model adds two parameters:
+        * upsilon -- the probability to notify a contact upon sampling
+        * phi -- the removal rate after being notified
+    """
+
+    def __init__(self, model, phi=np.inf, upsilon=0.5, *args, **kwargs):
         transition_rates = np.pad(model.transition_rates, ((0, model.transition_rates.shape[0]),
                                                            (0, model.transition_rates.shape[1])),
                                   mode='constant', constant_values=0)
@@ -327,7 +348,7 @@ class PNModel(Model):
                        transition_rates=transition_rates,
                        transmission_rates=transmission_rates,
                        removal_rates=np.pad(model.removal_rates, (0, model.removal_rates.shape[0]),
-                                            mode='constant', constant_values=partner_removal_rate),
+                                            mode='constant', constant_values=phi),
                        ps=np.pad(model.ps, (0, model.ps.shape[0]), mode='constant', constant_values=1),
                        n_recipients=np.concatenate([model.n_recipients, model.n_recipients]),
                        state_frequencies=pis,
@@ -337,21 +358,11 @@ class PNModel(Model):
         self.model = model
 
     def clone(self):
-        return PNModel(self.model, self.removal_rates[-1], self.__upsilon)
+        return CTModel(self.model, self.removal_rates[-1], self.__upsilon)
 
     @property
     def upsilon(self):
         return self.__upsilon
-
-    @property
-    def partner_removal_rate(self):
-        """
-        Get partner removal rate
-
-        :return partner removal rate
-        :rtype np.float64
-        """
-        return self.removal_rates[-1]
 
     def get_name(self):
         return self.model.get_name() + '-PN'

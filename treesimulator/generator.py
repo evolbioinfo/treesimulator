@@ -7,7 +7,7 @@ import scipy
 from ete3 import TreeNode
 
 from treesimulator import STATE, DIST_TO_START, TIME_TILL_NOW
-from treesimulator.mtbd_models import PNModel
+from treesimulator.mtbd_models import CTModel
 
 TRANSITION = 0
 TRANSMISSION = 1
@@ -16,7 +16,8 @@ EVENT_TYPES = np.array([TRANSITION, TRANSMISSION, REMOVAL])
 
 
 def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=np.inf,
-                            state_feature=STATE, state_frequencies=None, ltt=False, max_notified_partners=1):
+                            state_feature=STATE, state_frequencies=None, ltt=False, max_notified_contacts=1,
+                            root_state=None):
     """
     Simulates the tree evolution from a root over the given time based on the given model.
 
@@ -32,8 +33,8 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
     :type model: treesimulator.mtbd_models.Model
     :param ltt: whether to return LTT values as well (default False)
     :type ltt: bool
-    :param max_notified_partners: maximum notified partners for PN models (by default 1, meaning the most recent partner)
-    :type max_notified_partners: int
+    :param max_notified_contacts: maximum notified contacts for -CT models (by default 1, meaning the most recent contact)
+    :type max_notified_contacts: int
     :return: the simulated tree and the time it covers
     :rtype: ete3.Tree
     """
@@ -41,7 +42,9 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
     if state_frequencies is None:
         state_frequencies = model.state_frequencies
     state_indices = np.arange(num_states)
-    root_state = np.random.choice(state_indices, size=1, p=state_frequencies)[0]
+    root_states = state_indices[model.states == root_state]
+    root_state = np.random.choice(state_indices, size=1, p=state_frequencies)[0] \
+        if len(root_states) == 0 else root_states[0]
     # evolve till the time is up, following Gillespie
     time = 0
     infectious_nums = np.zeros(num_states, dtype=np.int64)
@@ -58,17 +61,21 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
     id2current_id = {0: 0}
     id2state = {0: root_state}
 
-    logging.debug('Aiming for at most {} sampled cases over time {}'.format(max_sampled, max_time))
-
     target_sampled = np.round(np.random.uniform(low=min_sampled, high=max_sampled, size=1)[0], 0) \
         if max_sampled < np.inf else np.inf
+
+    logging.debug('Aiming for {} sampled cases over time {}'
+                  .format(target_sampled if target_sampled < np.inf else 'any number of', max_time))
 
     num_states_squared = np.power(num_states, 2)
     rate_vector = np.concatenate([model.transition_rates.reshape(num_states_squared),
                                   model.transmission_rates.reshape(num_states_squared),
                                   model.removal_rates])
     index_vector = np.arange(rate_vector.shape[0])
-    transmission_probs = model.transmission_rates / model.transmission_rates.sum(axis=1).reshape((num_states, 1))
+    transmission_rates_per_state = model.transmission_rates.sum(axis=1)
+    # to avoid dividion by zero
+    transmission_rates_per_state[transmission_rates_per_state == 0] = 1
+    transmission_probs = model.transmission_rates / transmission_rates_per_state.reshape((num_states, 1))
 
     while infectious_nums.sum() and sampled_nums.sum() < target_sampled and time < max_time:
         infectious_num_vector = np.concatenate([np.tile(infectious_nums.reshape((num_states, 1)), (2, num_states))
@@ -141,40 +148,40 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
             sampled_nums[i] += 1
             msg += ' and sampled'
 
-            # partner notification
-            if isinstance(model, PNModel):
-                partner_n = max_notified_partners
-                # if the max number of notified partners per person allows and it is not the root
-                while partner_n > 0 and removed_id in id2parent_id:
+            # contact tracing
+            if isinstance(model, CTModel):
+                contact_n = max_notified_contacts
+                # if the max number of notified contacts per person allows and it is not the root
+                while contact_n > 0 and removed_id in id2parent_id:
                     parent_id = id2parent_id[removed_id]
                     donor_id = (parent_id[0], parent_id[1] + 1)
-                    partner_ids = donor_id2recipient_id[parent_id] if removed_id == donor_id else [donor_id]
-                    partner_ids = [partner_ids[_]
-                                   for _ in np.random.choice(np.arange(len(partner_ids)), replace=False,
-                                                             size=min(len(partner_ids), partner_n))]
-                    partner_n -= len(partner_ids)
-                    for partner_id in partner_ids:
-                        partner_id = partner_id[0], id2current_id[partner_id[0]]
+                    contact_ids = donor_id2recipient_id[parent_id] if removed_id == donor_id else [donor_id]
+                    contact_ids = [contact_ids[_]
+                                   for _ in np.random.choice(np.arange(len(contact_ids)), replace=False,
+                                                             size=min(len(contact_ids), contact_n))]
+                    contact_n -= len(contact_ids)
+                    for contact_id in contact_ids:
+                        contact_id = contact_id[0], id2current_id[contact_id[0]]
                         if removed_id != donor_id:
-                            # means this is the last partner this node has
-                            partner_n = 0
+                            # means this is the last contact this node has
+                            contact_n = 0
                         else:
                             removed_id = parent_id
-                        # If the notifier agrees and the partner is not yet removed, notify them
+                        # If the notifier agrees and the contact is not yet removed, notify them
                         if (np.random.uniform(0, 1, 1)[0] < model.upsilon
-                                and partner_id not in id2time):
-                            unnotified_partner_i = id2state[partner_id[0]]
+                                and contact_id not in id2time):
+                            unnotified_contact_i = id2state[contact_id[0]]
                             # The ids are organised as follows: s1, s2, ..., sm, s1-n, s2-n, ..., sm-n
-                            # Hence if we have an id >= m then the partner was already notified by someone else
-                            if unnotified_partner_i < num_states // 2:
-                                notified_partner_i = num_states // 2 + unnotified_partner_i
-                                id2state[partner_id[0]] = notified_partner_i
-                                infectious_state2id[unnotified_partner_i].remove(partner_id)
-                                infectious_state2id[notified_partner_i].add(partner_id)
-                                infectious_nums[unnotified_partner_i] -= 1
-                                infectious_nums[notified_partner_i] += 1
+                            # Hence if we have an id >= m then the contact was already notified by someone else
+                            if unnotified_contact_i < num_states // 2:
+                                notified_contact_i = num_states // 2 + unnotified_contact_i
+                                id2state[contact_id[0]] = notified_contact_i
+                                infectious_state2id[unnotified_contact_i].remove(contact_id)
+                                infectious_state2id[notified_contact_i].add(contact_id)
+                                infectious_nums[unnotified_contact_i] -= 1
+                                infectious_nums[notified_contact_i] += 1
                             msg += ' and notified {} in state {}' \
-                                .format(partner_id, model.states[unnotified_partner_i])
+                                .format(contact_id, model.states[unnotified_contact_i])
         logging.debug(msg)
 
     if max_time == np.inf:
@@ -195,7 +202,7 @@ def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_featu
     for node_id, state in sampled_id2state.items():
         time = id2time[node_id]
         # if there is PN it could be
-        # that we decided to stop at an earlier time when the unsampled partner proportion was lower
+        # that we decided to stop at an earlier time when the unsampled contact proportion was lower
         if time > max_time:
             continue
         node = TreeNode(dist=time - (0 if node_id not in id2parent else id2time[id2parent[node_id]]), name=node_id[0])
@@ -277,7 +284,7 @@ def random_pop(elements):
 
 
 def generate_forest(model, max_time=np.inf, min_tips=1000, keep_nones=False, state_feature=STATE,
-                    state_frequencies=None, ltt=False, max_notified_partners=1):
+                    state_frequencies=None, ltt=False, max_notified_contacts=1):
     total_n_tips = 0
     forest = []
     total_trees = 0
@@ -287,7 +294,7 @@ def generate_forest(model, max_time=np.inf, min_tips=1000, keep_nones=False, sta
         if ltt:
             tree, cur_ltt, _ = simulate_tree_gillespie(model, max_time=max_time, ltt=True,
                                                        state_feature=state_feature, state_frequencies=state_frequencies,
-                                                       max_notified_partners=max_notified_partners)
+                                                       max_notified_contacts=max_notified_contacts)
             if res_ltt is None:
                 res_ltt = cur_ltt
             else:
@@ -304,7 +311,7 @@ def generate_forest(model, max_time=np.inf, min_tips=1000, keep_nones=False, sta
         else:
             tree, _ = simulate_tree_gillespie(model, max_time=max_time,
                                               state_feature=state_feature, state_frequencies=state_frequencies,
-                                              max_notified_partners=max_notified_partners)
+                                              max_notified_contacts=max_notified_contacts)
         total_trees += 1
         if tree:
             total_n_tips += len(tree)
@@ -317,7 +324,7 @@ def generate_forest(model, max_time=np.inf, min_tips=1000, keep_nones=False, sta
         return forest
 
 
-def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None, max_notified_partners=1):
+def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None, max_notified_contacts=1):
     """
     Simulates a tree (or a forest of trees, if --T is specified) for given MTBD model parameters.
 
@@ -340,8 +347,8 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None, max_no
     :param state_frequencies: array of model state frequencies,
         to be used to draw the root states. If not given, will be taken from the model (by default all equal).
     :type state_frequencies: list(float)
-    :param max_notified_partners: maximum notified partners for PN models (by default 1, meaning the most recent partner)
-    :type max_notified_partners: int
+    :param max_notified_contacts: maximum notified contacts for -CT models (by default 1, meaning the most recent contact)
+    :type max_notified_contacts: int
     :return: the simulated forest (containing only one tree in case of a tree simulation),
         stats on total number of tips, on the number of hidden trees (0  case of a tree simulation), and on total time T,
         and the LTT numbers as a mapping between times and numbers of infected individuals
@@ -353,9 +360,9 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None, max_no
 
     if T < np.inf:
         while True:
-            forest, ltt = generate_forest(model, max_time=T, min_tips=min_tips, max_sampled=max_tips,
+            forest, ltt = generate_forest(model, max_time=T, min_tips=min_tips,
                                           keep_nones=True, state_frequencies=state_frequencies, ltt=True,
-                                          max_notified_partners=max_notified_partners)
+                                          max_notified_contacts=max_notified_contacts)
             total_trees = len(forest)
             forest = [tree for tree in forest if tree is not None]
             fl = len(forest)
@@ -372,7 +379,7 @@ def generate(model, min_tips, max_tips, T=np.inf, state_frequencies=None, max_no
             tree, ltt, max_time = simulate_tree_gillespie(model, max_time=np.inf,
                                                           max_sampled=max_tips, min_sampled=min_tips,
                                                           state_frequencies=state_frequencies, ltt=True,
-                                                          max_notified_partners=max_notified_partners)
+                                                          max_notified_contacts = max_notified_contacts)
             total_tips = len(tree) if tree else 0
             if total_tips >= min_tips:
                 logging.info('Generated a tree with {} sampled tips over time T={}.'.format(total_tips, max_time))

@@ -4,7 +4,7 @@ import numpy as np
 
 from treesimulator import save_forest, save_log, save_ltt
 from treesimulator.generator import generate, observed_ltt
-from treesimulator.mtbd_models import BirthDeathModel, PNModel
+from treesimulator.mtbd_models import BirthDeathModel, CTModel
 
 
 def main():
@@ -38,13 +38,13 @@ def main():
     parser.add_argument('--psi', required=True, type=float, help="removal rate")
     parser.add_argument('--p', required=True, type=float, help='sampling probability')
     parser.add_argument('--upsilon', required=False, default=0, type=float, help='notification probability')
-    parser.add_argument('--max_notified_partners', required=False, default=1, type=int,
-                        help='maximum number of notified partners per person')
+    parser.add_argument('--max_notified_contacts', required=False, default=1, type=int,
+                        help='maximum number of notified contacts per person')
     parser.add_argument('--avg_recipients', required=False, default=1, type=float,
                         help='average number of recipients per transmission. '
                              'By default one (one-to-one transmission), '
                              'but if a larger number is given then one-to-many transmissions become possible.')
-    parser.add_argument('--phi', required=False, default=0, type=float, help='partner removal rate')
+    parser.add_argument('--phi', required=False, default=0, type=float, help='notified removal rate')
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
@@ -62,13 +62,13 @@ def main():
     model = BirthDeathModel(p=params.p, la=params.la, psi=params.psi, n_recipients=[params.avg_recipients])
     if params.upsilon and params.upsilon > 0:
         logging.info('PN parameters are:\n\tphi={}\n\tupsilon={}'.format(params.phi, params.upsilon))
-        model = PNModel(model=model, upsilon=params.upsilon, partner_removal_rate=params.phi)
+        model = CTModel(model=model, upsilon=params.upsilon, phi=params.phi)
 
     if params.T < np.inf:
         logging.info('Total time T={}'.format(params.T))
 
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T,
-                                               max_notified_partners=params.max_notified_partners)
+                                               max_notified_contacts=params.max_notified_contacts)
 
     save_forest(forest, params.nwk)
     save_log(model, total_tips, T, u, params.log)

@@ -4,7 +4,7 @@ import numpy as np
 
 from treesimulator import save_forest, save_log, save_ltt
 from treesimulator.generator import generate, observed_ltt
-from treesimulator.mtbd_models import BirthDeathWithSuperSpreadingModel, PNModel
+from treesimulator.mtbd_models import BirthDeathWithSuperSpreadingModel, CTModel
 
 
 def main():
@@ -41,9 +41,9 @@ def main():
     parser.add_argument('--psi', required=True, type=float, help="removal rate")
     parser.add_argument('--p', required=True, type=float, help='sampling probability')
     parser.add_argument('--upsilon', required=False, default=0, type=float, help='notification probability')
-    parser.add_argument('--phi', required=False, default=0, type=float, help='partner removal rate')
-    parser.add_argument('--max_notified_partners', required=False, default=1, type=int,
-                        help='maximum number of notified partners per person')
+    parser.add_argument('--phi', required=False, default=0, type=float, help='notified removal rate')
+    parser.add_argument('--max_notified_contacts', required=False, default=1, type=int,
+                        help='maximum number of notified contacts per person')
     parser.add_argument('--avg_recipients', nargs=2, default=[1, 1], type=float,
                         help='average number of recipients per transmission '
                              'for each donor state (normal spreader, superspreader). '
@@ -69,13 +69,13 @@ def main():
                                               n_recipients=params.avg_recipients)
     if params.upsilon and params.upsilon > 0:
         logging.info('PN parameters are:\n\tphi={}\n\tupsilon={}'.format(params.phi, params.upsilon))
-        model = PNModel(model=model, upsilon=params.upsilon, partner_removal_rate=params.phi)
+        model = CTModel(model=model, upsilon=params.upsilon, phi=params.phi)
 
     if params.T < np.inf:
         logging.info('Total time T={}'.format(params.T))
 
     forest, (total_tips, u, T), ltt = generate(model, params.min_tips, params.max_tips, T=params.T,
-                                               max_notified_partners=params.max_notified_partners)
+                                               max_notified_contacts=params.max_notified_contacts)
 
     save_forest(forest, params.nwk)
     save_log(model, total_tips, T, u, params.log)
