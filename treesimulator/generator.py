@@ -78,6 +78,11 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
     transmission_probs = model.transmission_rates / transmission_rates_per_state.reshape((num_states, 1))
 
     while infectious_nums.sum() and sampled_nums.sum() < target_sampled and time < max_time:
+        total_infected = infectious_nums.sum()
+        logging.debug(f'Among {total_infected} infected individuals ' +
+                      ", ".join(f"{pi_i:.3f} are in state {s_i}"
+                                   for (pi_i, s_i) in zip(infectious_nums / total_infected, model.states)))
+        
         infectious_num_vector = np.concatenate([np.tile(infectious_nums.reshape((num_states, 1)), (2, num_states))
                                                .reshape(num_states_squared * 2), infectious_nums])
         total_rate_vector = rate_vector * infectious_num_vector
