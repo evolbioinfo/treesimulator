@@ -35,10 +35,12 @@ Contact tracing adds two parameters to the initial MTBD model:
 * υ -- probability to notify contacts upon sampling
 * φ -- notified contact removal and sampling rate: φ >> ψ<sub>i</sub> ∀i (1 ≤ i ≤ m). The pathogen of a notified contact is sampled automatically (with a probability of 1) upon removal. 
 
+and a meta-parameter κ, which defines how many most recent contacts can be notified by each index case. Each is notified independently, with the probability υ.
+
 
 We pay particular interest to the classical BD model, the BD Exposed-Infectious (BDEI) model, 
 and BD with superspreading (BDSS), 
-as they are described in [[Voznica _et al._ 2021]]((https://www.biorxiv.org/content/10.1101/2021.03.11.435006v1)), and to their -CT versions.
+as they are described in [[Voznica _et al._ 2021]]((https://www.biorxiv.org/content/10.1101/2021.03.11.435006v1)), and to their -CT(κ) versions.
 
 
 ## BD
@@ -52,7 +54,7 @@ Epidemiological parameters:
 * 1/ψ -- infectious time
 
 
-## BD-CT
+## BD-CT(κ)
 5 parameters:
 * λ -- transmission rate
 * ψ -- removal rate
@@ -83,7 +85,7 @@ Epidemiological parameters:
 * 1/μ -- incubation period
 
 
-## BDEI-CT
+## BDEI-CT(κ)
 2 states: 
 * E, exposed, i.e. infected but not yet infectious
 * I, infectious
@@ -123,7 +125,7 @@ Epidemiological parameters:
 * X=λ<sub>ss</sub>/λ<sub>ns</sub>=λ<sub>sn</sub>/λ<sub>nn</sub> -- super-spreading transmission ratio
 * f=λ<sub>ss</sub>/(λ<sub>sn</sub> + λ<sub>ss</sub>) -- super-spreading fraction
 
-## BDSS-CT
+## BDSS-CT(κ)
 2 states: 
 * N, standard infectious individual
 * S, superspreader
@@ -186,7 +188,7 @@ conda activate phyloenv
 ```
 
 
-#### BD and BD-CT
+#### BD and BD-CT(κ)
 The following command simulates a tree with 200-500 tips under the BD model, with λ=0.5, ψ=0.25, p=0.5,
 and saves it to the file tree.nwk, while saving the parameters to the comma-separated file params.csv:
 ```bash
@@ -194,7 +196,7 @@ generate_bd --min_tips 200 --max_tips 500 \
 --la 0.5 --psi 0.25 --p 0.5 \
 --nwk tree.nwk --log params.csv
 ```
-The following command simulates a tree with 200-500 tips under the BD-CT model, with λ=0.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
+The following command simulates a tree with 200-500 tips under the BD-CT(1) model, with λ=0.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
 and allowing to notify only the most recent contact of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
@@ -208,7 +210,7 @@ To see detailed options, run:
 generate_bd --help
 ```
 
-#### BDEI and BDEI-CT
+#### BDEI and BDEI-CT(κ)
 The following command simulates a tree with 200-500 tips under the BDEI model, with μ=1, λ=0.5, ψ=0.25, p=0.5, 
 and saves it to the file tree.nwk, while saving the parameters to the comma-separated file params.csv:
 ```bash
@@ -216,13 +218,13 @@ generate_bdei --min_tips 200 --max_tips 500 \
 --mu 1 --la 0.5 --psi 0.25 --p 0.5 \
 --nwk tree.nwk --log params.csv
 ```
-The following command simulates a tree with 200-500 tips under the BDEI-CT model, with μ=1, λ=0.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
-and allowing to notify only the most recent contact of each sampled index case. 
+The following command simulates a tree with 200-500 tips under the BDEI-CT(2) model, with μ=1, λ=0.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
+and allowing to notify two most recent contacts of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bdei --min_tips 200 --max_tips 500 \
 --mu 1 --la 0.5 --psi 0.25 --p 0.5 \
---phi 2.5 --upsilon 0.2 --max_notified_contacts 1 \
+--phi 2.5 --upsilon 0.2 --max_notified_contacts 2 \
 --nwk tree.nwk --log params.csv
 ```
 To see detailed options, run:
@@ -231,7 +233,7 @@ generate_bdei --help
 ```
 
 
-#### BDSS and BDSS-CT
+#### BDSS and BDSS-CT(κ)
 The following command simulates a tree with 200-500 tips under the BDSS model, 
 with λ<sub>nn</sub>=0.1, λ<sub>ns</sub>=0.3, λ<sub>sn</sub>=0.5, λ<sub>ss</sub>=1.5, ψ=0.25, p=0.5, 
 and saves it to the file tree.nwk, while saving the parameters to the comma-separated file params.csv:
@@ -242,12 +244,12 @@ generate_bdss --min_tips 200 --max_tips 500 \
 ```
 The following command simulates a tree with 200-500 tips under the BDSS-CT model, 
 with λ<sub>nn</sub>=0.1, λ<sub>ns</sub>=0.3, λ<sub>sn</sub>=0.5, λ<sub>ss</sub>=1.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
-and allowing to notify only the most recent contact of each sampled index case. 
+and allowing to notify three most recent contact of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bdss --min_tips 200 --max_tips 500 \
 --la_nn 0.1 --la_ns 0.3 --la_sn 0.5 --la_ss 1.5 --psi 0.25 --p 0.5 \
---phi 2.5 --upsilon 0.2 --max_notified_contacts 1 \
+--phi 2.5 --upsilon 0.2 --max_notified_contacts 3 \
 --nwk tree.nwk --log params.csv
 ```
 To see detailed options, run:
@@ -255,7 +257,7 @@ To see detailed options, run:
 generate_bdss --help
 ```
 
-#### User-defined MTBD and MTBD-CT models
+#### User-defined MTBD and MTBD-CT(κ) models
 The following command simulates a tree with 200-500 tips under a generic MTBD model, with two states A and B, 
 with μ<sub>aa</sub>=0.5, μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7, μ<sub>bb</sub>=0.8, 
 λ<sub>aa</sub>=0.1, λ<sub>ab</sub>=0.2, λ<sub>ba</sub>=0.3, λ<sub>bb</sub>=0.4, 
@@ -303,40 +305,40 @@ from treesimulator.generator import generate
 from treesimulator import save_forest
 from treesimulator.mtbd_models import Model, BirthDeathModel, BirthDeathExposedInfectiousModel, BirthDeathWithSuperSpreadingModel, CTModel
 
-# BD and BD-CT
+# BD and BD-CT(1)
 bd_model = BirthDeathModel(p=0.5, la=0.5, psi=0.25)
 print(bd_model.get_epidemiological_parameters())
 [bd_tree], _, _ = generate(bd_model, min_tips=200, max_tips=500)
 save_forest([bd_tree], 'BD_tree.nwk')
-bdct_model = CTModel(model=bd_model, upsilon=0.2, notified_removal_rate=2.5)
+bdct_model = CTModel(model=bd_model, upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=1)
 [bdct_tree], _, _ = generate(bdct_model, min_tips=200, max_tips=500)
 save_forest([bdct_tree], 'BDCT_tree.nwk')
 
-# BDEI and BDEI-CT
+# BDEI and BDEI-CT(2)
 bdei_model = BirthDeathExposedInfectiousModel(p=0.5, mu=1, la=0.5, psi=0.25)
 print(bdei_model.get_epidemiological_parameters())
 [bdei_tree], _, _ = generate(bdei_model, min_tips=200, max_tips=500)
 save_forest([bdei_tree], 'BDEI_tree.nwk')
-bdeict_model = CTModel(model=bdei_model, upsilon=0.2, notified_removal_rate=2.5)
+bdeict_model = CTModel(model=bdei_model, upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=2)
 [bdeict_tree], _, _ = generate(bdeict_model, min_tips=200, max_tips=500)
 save_forest([bdeict_tree], 'BDEICT_tree.nwk')
 
-# BDSS and BDSS-CT
+# BDSS and BDSS-CT(3)
 bdss_model = BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.1, la_ns=0.3, la_sn=0.5, la_ss=1.5, psi=0.25)
 print(bdss_model.get_epidemiological_parameters())
 [bdss_tree], _, _ = generate(bdss_model, min_tips=200, max_tips=500)
 save_forest([bdss_tree], 'BDSS_tree.nwk')
-bdssct_model = CTModel(model=bdss_model, upsilon=0.2, notified_removal_rate=2.5)
+bdssct_model = CTModel(model=bdss_model, upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=3)
 [bdssct_tree], _, _ = generate(bdssct_model, min_tips=200, max_tips=500)
 save_forest([bdssct_tree], 'BDSSCT_tree.nwk')
 
-# MTBD and MTBD-CT
+# MTBD and MTBD-CT(1)
 mtbd_model = Model(states=['A', 'B'], transition_rates=[[0.5, 0.6], [0.7, 0.8]],
                    transmission_rates=[[0.1, 0.2], [0.3, 0.4]],
                    removal_rates=[0.05, 0.08], ps=[0.15, 0.65])
 [mtbd_tree], _, _ = generate(mtbd_model, min_tips=200, max_tips=500)
 save_forest([mtbd_tree], 'MTBD_tree.nwk')
-mtbdct_model = CTModel(model=mtbd_model, upsilon=0.2, notified_removal_rate=2.5)
+mtbdct_model = CTModel(model=mtbd_model, upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=1)
 [mtbdct_tree], _, _ = generate(mtbdct_model, min_tips=200, max_tips=500)
 save_forest([mtbdct_tree], 'MTBDCT_tree.nwk')
 ```
