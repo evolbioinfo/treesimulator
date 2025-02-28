@@ -242,7 +242,7 @@ generate_bdss --min_tips 200 --max_tips 500 \
 --la_nn 0.1 --la_ns 0.3 --la_sn 0.5 --la_ss 1.5 --psi 0.25 --p 0.5 \
 --nwk tree.nwk --log params.csv
 ```
-The following command simulates a tree with 200-500 tips under the BDSS-CT model, 
+The following command simulates a tree with 200-500 tips under the BDSS-CT(3) model, 
 with λ<sub>nn</sub>=0.1, λ<sub>ns</sub>=0.3, λ<sub>sn</sub>=0.5, λ<sub>ss</sub>=1.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
 and allowing to notify three most recent contact of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
@@ -273,7 +273,7 @@ generate_mtbd --min_tips 200 --max_tips 500 \
 --sampling_probabilities 0.15 0.65 \
 --nwk tree.nwk --log params.csv
 ```
-The following command simulates a tree with 200-500 tips under a generic MTBD model, with two states A and B, 
+The following command simulates a tree with 200-500 tips under a generic MTBD-CT(1) model, with two states A and B, 
 with μ<sub>aa</sub>=0.5, μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7, μ<sub>bb</sub>=0.8, 
 λ<sub>aa</sub>=0.1, λ<sub>ab</sub>=0.2, λ<sub>ba</sub>=0.3, λ<sub>bb</sub>=0.4, 
 ψ<sub>a</sub>=0.05, ψ<sub>b</sub>=0.08,
