@@ -1,6 +1,6 @@
 # treesimulator
 
-Simulation of rooted phylogenetic trees under a given Multitype Birth–Death (MTBD) model, with or without partner notification (PN).
+Simulation of rooted phylogenetic trees under a given Multi-Type Birth–Death (MTBD) model, with or without contact tracing (CT).
 
 ## Preprint
 
