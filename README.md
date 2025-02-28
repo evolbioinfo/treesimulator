@@ -304,27 +304,27 @@ bd_model = BirthDeathModel(p=0.5, la=0.5, psi=0.25)
 print(bd_model.get_epidemiological_parameters())
 [bd_tree], _, _ = generate(bd_model, min_tips=200, max_tips=500)
 save_forest([bd_tree], 'BD_tree.nwk')
-bdpn_model = CTModel(model=bd_model, upsilon=0.2, notified_removal_rate=2.5)
-[bdpn_tree], _, _ = generate(bdpn_model, min_tips=200, max_tips=500)
-save_forest([bdpn_tree], 'BDCT_tree.nwk')
+bdct_model = CTModel(model=bd_model, upsilon=0.2, notified_removal_rate=2.5)
+[bdct_tree], _, _ = generate(bdct_model, min_tips=200, max_tips=500)
+save_forest([bdct_tree], 'BDCT_tree.nwk')
 
 # BDEI and BDEI-CT
 bdei_model = BirthDeathExposedInfectiousModel(p=0.5, mu=1, la=0.5, psi=0.25)
 print(bdei_model.get_epidemiological_parameters())
 [bdei_tree], _, _ = generate(bdei_model, min_tips=200, max_tips=500)
 save_forest([bdei_tree], 'BDEI_tree.nwk')
-bdeipn_model = CTModel(model=bdei_model, upsilon=0.2, notified_removal_rate=2.5)
-[bdeipn_tree], _, _ = generate(bdeipn_model, min_tips=200, max_tips=500)
-save_forest([bdeipn_tree], 'BDEICT_tree.nwk')
+bdeict_model = CTModel(model=bdei_model, upsilon=0.2, notified_removal_rate=2.5)
+[bdeict_tree], _, _ = generate(bdeict_model, min_tips=200, max_tips=500)
+save_forest([bdeict_tree], 'BDEICT_tree.nwk')
 
 # BDSS and BDSS-CT
 bdss_model = BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.1, la_ns=0.3, la_sn=0.5, la_ss=1.5, psi=0.25)
 print(bdss_model.get_epidemiological_parameters())
 [bdss_tree], _, _ = generate(bdss_model, min_tips=200, max_tips=500)
 save_forest([bdss_tree], 'BDSS_tree.nwk')
-bdsspn_model = CTModel(model=bdss_model, upsilon=0.2, notified_removal_rate=2.5)
-[bdsspn_tree], _, _ = generate(bdsspn_model, min_tips=200, max_tips=500)
-save_forest([bdsspn_tree], 'BDSSCT_tree.nwk')
+bdssct_model = CTModel(model=bdss_model, upsilon=0.2, notified_removal_rate=2.5)
+[bdssct_tree], _, _ = generate(bdssct_model, min_tips=200, max_tips=500)
+save_forest([bdssct_tree], 'BDSSCT_tree.nwk')
 
 # MTBD and MTBD-CT
 mtbd_model = Model(states=['A', 'B'], transition_rates=[[0.5, 0.6], [0.7, 0.8]],
@@ -332,9 +332,9 @@ mtbd_model = Model(states=['A', 'B'], transition_rates=[[0.5, 0.6], [0.7, 0.8]],
                    removal_rates=[0.05, 0.08], ps=[0.15, 0.65])
 [mtbd_tree], _, _ = generate(mtbd_model, min_tips=200, max_tips=500)
 save_forest([mtbd_tree], 'MTBD_tree.nwk')
-mtbdpn_model = CTModel(model=mtbd_model, upsilon=0.2, notified_removal_rate=2.5)
-[mtbdpn_tree], _, _ = generate(mtbdpn_model, min_tips=200, max_tips=500)
-save_forest([mtbdpn_tree], 'MTBDCT_tree.nwk')
+mtbdct_model = CTModel(model=mtbd_model, upsilon=0.2, notified_removal_rate=2.5)
+[mtbdct_tree], _, _ = generate(mtbdct_model, min_tips=200, max_tips=500)
+save_forest([mtbdct_tree], 'MTBDCT_tree.nwk')
 ```
 
 ### Run with apptainer
