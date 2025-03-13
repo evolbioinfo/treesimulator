@@ -136,8 +136,9 @@ def simulate_tree_gillespie(model, max_time=np.inf, min_sampled=0, max_sampled=n
                 id2parent_id[cur_id] = parent_id
                 recipient_ids.append(cur_id)
             donor_id2recipient_id[parent_id] = recipient_ids
-            logging.debug('Time {}:\t{} in state {} transmitted to {} in state(s) {}'
-                          .format(time, parent_id, model.states[i], recipient_ids, [model.states[j] for j in js]))
+            logging.debug('Time {}:\t{} in state {} transmitted to {} in state{} {}'
+                          .format(time, parent_id, model.states[i], ', '.join(str(_) for _ in recipient_ids),
+                                  's' if len(recipient_ids) > 1 else '', ', '.join(model.states[j] for j in js)))
             continue
         random_event_index -= num_states_squared
 

@@ -5,11 +5,12 @@ DIST_TO_START = 'D'
 TIME_TILL_NOW = 'T'
 
 
-def save_forest(forest, nwk):
+def save_forest(forest, nwk, state_feature=STATE):
     os.makedirs(os.path.dirname(os.path.abspath(nwk)), exist_ok=True)
     with open(nwk, 'w+') as f:
         for tree in forest:
-            nwk = tree.write(format=5, format_root_node=True)
+            features = [state_feature] if state_feature is not None else []
+            nwk = tree.write(format=5, format_root_node=True, features=features)
             f.write('{}\n'.format(nwk))
 
 

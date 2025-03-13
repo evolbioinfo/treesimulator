@@ -13,7 +13,7 @@ setup(
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    version='0.2.3',
+    version='0.2.4',
     description='Simulation of rooted phylogenetic trees under a given Multi-Type Birth–Death model (with or without Contact Tracing).',
     author='Anna Zhukova',
     author_email='anna.zhukova@pasteur.fr',
