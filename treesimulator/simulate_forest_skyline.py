@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from treesimulator import save_forest, save_log, save_ltt
-from treesimulator.generator import generate, observed_ltt
+from treesimulator.generator_skyline import generate, observed_ltt
 from treesimulator.mtbd_models import Model, CTModel
 
 
