@@ -5,8 +5,9 @@ with or without contact tracing (CT),
 and with or without Skyline. 
 
 ## Preprint
+treesimulator is described in the S1 Appendix of the following article:
 
-Anna Zhukova, Olivier Gascuel. Accounting for contact tracing in epidemiological birth-death-models. medRxiv 2024.09.09.24313296; doi:[10.1101/2024.09.09.24313296](https://doi.org/10.1101/2024.09.09.24313296)
+Anna Zhukova, Olivier Gascuel. Accounting for contact tracing in epidemiological birth-death models. medRxiv 2024.09.09.24313296; doi:[10.1101/2024.09.09.24313296](https://www.medrxiv.org/content/10.1101/2024.09.09.24313296v2.supplementary-material)
 
 [![DOI:10.1101/2024.09.09.24313296](https://zenodo.org/badge/DOI/10.1101/2024.09.09.24313296.svg)](https://doi.org/10.1101/2024.09.09.24313296)
 [![GitHub release](https://img.shields.io/github/v/release/evolbioinfo/treesimulator.svg)](https://github.com/evolbioinfo/treesimulator/releases)
