@@ -186,10 +186,18 @@ class Model(object):
         pis = self.state_frequencies
         avg_transmission_rate = pis.dot(self.transmission_rates.sum(axis=1) * self.n_recipients)
         avg_removal_rate = pis.dot(self.removal_rates)
-        return {'R0': avg_transmission_rate / avg_removal_rate,
-                'transition rates': self.transition_rates, 'transmission rates': self.transmission_rates,
-                'removal rates': self.removal_rates, 'sampling probabilities': self.ps,
-                'n_recipients': self.n_recipients}
+        res = {'R0': avg_transmission_rate / avg_removal_rate}
+        n_states = len(self.states)
+        for i in range(n_states):
+            for j in range(n_states):
+                if i != j:
+                    res[f'mu_{self.states[i]}{self.states[j]}'] = self.transition_rates[i][j]
+                res[f'la_{self.states[i]}{self.states[j]}'] = self.transmission_rates[i][j]
+            res[f'psi_{self.states[i]}'] = self.removal_rates[i]
+            res[f'p_{self.states[i]}'] = self.ps[i]
+            if np.any(self.n_recipients != 1):
+                res[f'n_recipients_{self.states[i]}'] = self.n_recipients[i]
+        return res
 
 
 class BirthDeathExposedInfectiousModel(Model):

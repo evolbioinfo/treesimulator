@@ -28,12 +28,17 @@ def save_ltt(real_ltt, observed_ltt, ltt_file):
             f.write('{}\t{}\t{}\n'.format(time, real, observed))
 
 
-def save_log(model, total_tips, T, u, log):
-    res = model.get_epidemiological_parameters()
-    res['tips'] = total_tips
-    res['time'] = T
-    res['hidden_trees'] = u
+def save_log(models, skyline_times, total_tips, T, u, log):
     os.makedirs(os.path.dirname(os.path.abspath(log)), exist_ok=True)
+    if skyline_times is None:
+        skyline_times = []
+    skyline_times = [_ for _ in skyline_times if _ <= T]
+    skyline_times += [T]
     with open(log, 'w+') as f:
-        f.write('{}\n'.format(','.join(res.keys())))
-        f.write('{}\n'.format(','.join(str(_) for _ in res.values())))
+        keys = sorted(models[0].get_epidemiological_parameters().keys())
+        f.write('{},tips,hidden_trees,end_time\n'.format(','.join(keys)))
+        for model, end_time in zip(models, skyline_times):
+            tips = '' if end_time < T else total_tips
+            params = model.get_epidemiological_parameters()
+            f.write('{},{},{},{:g}\n'.format(','.join(f'{params[k]:g}' for k in keys), tips, u, end_time))
+            u = ''

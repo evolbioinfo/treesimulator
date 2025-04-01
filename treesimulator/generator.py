@@ -7,7 +7,7 @@ import scipy
 from ete3 import TreeNode
 
 from treesimulator import STATE, DIST_TO_START, TIME_TILL_NOW
-from treesimulator.mtbd_models import CTModel, Model
+from treesimulator.mtbd_models import CTModel
 
 TRANSITION = 0
 TRANSMISSION = 1
@@ -19,43 +19,48 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
                             state_feature=STATE, state_frequencies=None, ltt=False, max_notified_contacts=1,
                             root_state=None):
     """
-    Simulates the tree evolution from a root over the given time based on the given model or models.
+    Simulates the tree evolution from a root over the given time based on the given model(s).
 
-    Parameters:
-    models - either a single Model instance or a list of Model instances for skyline simulation
-    skyline_times - list of time points where model parameters change (length should be len(models)-1),
-                   representing when to switch from model i to model i+1. The first model always starts at time 0.
+
+    :param models: MTBD model(s) used to simulate the tree. Several models can be used for Skyline simulations
+        (to be combined with skyline_times). If a Skyline is used, all models must be of the same MTBD-CT flavour.
+    :type models: list(treesimulator.mtbd_models.Model)
+    :param skyline_times: for Skyline models, list of time points where model parameters switch from model i to model i+1.
+        Must be sorted in ascending order and contain one less elements than the number of models.
+        The first model always starts at time 0.
+    :type skyline_times: list(float)
+    :param min_sampled: minimal number of sampled nodes (when reached, the simulation could stop), by default 0
+    type min_sampled: int
+    :param max_sampled: maximal number of sampled nodes (when reached, the simulation stops), by default infinity
+    :type max_sampled: int
+    :param max_time: time over which we generate a tree, by default infinity
+    :type max_time: float
+    :param state_feature: a name of the tree feature which will store node states
+    :param state_frequencies: array of equilibrium frequencies of the states of (the first) model
+        (to be used to draw the root state). If not given, will be taken from the model (by default all equal).
+    :param ltt: whether to return LTT values as well (default False)
+    :type ltt: bool
+    :param max_notified_contacts: maximum notified contacts for -CT models (by default 1, meaning the most recent contact)
+    :type max_notified_contacts: int
+    :return: the simulated tree and the time it covers
+    :rtype: ete3.Tree
     """
     # Check if we're using skyline models (list with more than one model)
     use_skyline = isinstance(models, list) and len(models) > 1
-
-    # Get the model - if it's a list with only one model, extract that model
-    if isinstance(models, list) and len(models) == 1:
-        model = models[0]  # Extract the single model from the list
-    else:
-        model = models[0] if use_skyline else models
-
     # Validate skyline times if using skyline
     if use_skyline:
-        if skyline_times is None:
-            raise ValueError("For skyline models, skyline_times must be provided")
+        check_skyline_times(skyline_times, len(models))
 
-        if len(skyline_times) != len(models) - 1:
-            raise ValueError(
-                f"For skyline models, skyline_times must have length = len(models)-1 (since model[0] always starts at time 0). "
-                f"Got {len(models)} models and {len(skyline_times)} time points")
+    # Initialize variables to track the current model
+    current_model = models[0] if isinstance(models, list) else models
+    current_model_index = 0
 
-        # Verify that times are sorted
-        for i in range(len(skyline_times) - 1):
-            if skyline_times[i] >= skyline_times[i + 1]:
-                raise ValueError(
-                    f"Time points must be in ascending order. Found skyline_times[{i}] = {skyline_times[i]} >= skyline_times[{i + 1}] = {skyline_times[i + 1]}")
 
-    num_states = len(model.states)
+    num_states = len(current_model.states)
     if state_frequencies is None:
-        state_frequencies = model.state_frequencies
+        state_frequencies = current_model.state_frequencies
     state_indices = np.arange(num_states)
-    root_states = state_indices[model.states == root_state] if root_state is not None else []
+    root_states = state_indices[current_model.states == root_state]
     root_state = np.random.choice(state_indices, size=1, p=state_frequencies)[0] \
         if len(root_states) == 0 else root_states[0]
 
@@ -64,7 +69,7 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
     infectious_nums[root_state] = 1
     sampled_nums = np.zeros(num_states, dtype=np.int64)
 
-    infectious_state2id = [set() for _ in model.states]
+    infectious_state2id = [set() for _ in current_model.states]
     cur_id = 0, 0
     infectious_state2id[root_state].add(cur_id)
     id2time = {}
@@ -81,16 +86,13 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
                   .format(target_sampled if target_sampled < np.inf else 'any number of', max_time))
 
     num_states_squared = np.power(num_states, 2)
+    # transition rates (n^2) + transmission rates (n^2) + removal rates (n)
     index_vector = np.arange(num_states_squared * 2 + num_states)
 
-    # Initialize variables to track the current model
-    current_model = models[0]  # Always start with first model
-    current_model_index = 0
     # Determine next model change time (first element of skyline_times or infinity if only one model)
-    next_model_change = float('inf') if not use_skyline or len(skyline_times) == 0 else skyline_times[0]
+    next_model_change = np.inf if not use_skyline else skyline_times[0]
 
     # Variables for rates that only need to be updated when model changes
-    transmission_rates_per_state = None
     transmission_probs = None
     rate_vector = None
 
@@ -102,20 +104,20 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
         if model_changed:
             # Update model-dependent parameters
             transmission_rates_per_state = current_model.transmission_rates.sum(axis=1)
+            # to avoid division by zero
             transmission_rates_per_state[transmission_rates_per_state == 0] = 1
             transmission_probs = current_model.transmission_rates / transmission_rates_per_state.reshape(
                 (num_states, 1))
-
-            # Update rate vector based on current model
             rate_vector = np.concatenate([current_model.transition_rates.reshape(num_states_squared),
                                           current_model.transmission_rates.reshape(num_states_squared),
                                           current_model.removal_rates])
             model_changed = False
 
         total_infected = infectious_nums.sum()
-        logging.debug(f'Among {total_infected} infected individuals ' +
-                      ", ".join(f"{pi_i:.3f} are in state {s_i}"
-                                for (pi_i, s_i) in zip(infectious_nums / total_infected, current_model.states)))
+        if num_states > 1:
+            logging.debug(f'Among {total_infected} infected individuals ' +
+                          ", ".join(f"{pi_i * 100:.2f}% are in state {s_i}"
+                                    for (pi_i, s_i) in zip(infectious_nums / total_infected, current_model.states)))
 
         infectious_num_vector = np.concatenate([np.tile(infectious_nums.reshape((num_states, 1)), (2, num_states))
                                                .reshape(num_states_squared * 2), infectious_nums])
@@ -132,7 +134,7 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
         next_event_time = time + time_to_next_event
 
         # Check if we need to change models before the next event (for skyline)
-        if next_event_time > next_model_change and use_skyline:
+        if use_skyline and next_event_time > next_model_change:
             # Model change occurs before the next event
             time = next_model_change
             current_model_index += 1
@@ -140,19 +142,19 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
             model_changed = True
 
             # Get the next model change time from skyline_times
-            if current_model_index < len(skyline_times):
-                next_model_change = skyline_times[current_model_index]
-            else:
-                next_model_change = float('inf')  # No more model changes
+            next_model_change = skyline_times[current_model_index] \
+                if current_model_index < len(skyline_times) else np.inf
 
-            logging.debug(f"Switching to model at index {current_model_index} for time {time}")
+            logging.debug(f"Switching to model {current_model_index} at time {time}")
             continue  # Restart the loop with the new model
+
+        # check if time's up
+        if next_event_time >= max_time:
+            time = max_time
+            break
 
         # Update time with the event time
         time = next_event_time
-        if time >= max_time:
-            time = max_time
-            break
 
         # Now let us see which event will happen
         random_event_index = np.random.choice(index_vector, p=total_rate_vector / total_rate_vector.sum(),
@@ -221,6 +223,7 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
             # contact tracing
             if isinstance(current_model, CTModel):
                 contact_n = max_notified_contacts
+                # if the max number of notified contacts per person allows and it is not the root
                 while contact_n > 0 and removed_id in id2parent_id:
                     parent_id = id2parent_id[removed_id]
                     donor_id = (parent_id[0], parent_id[1] + 1)
@@ -232,12 +235,16 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
                     for contact_id in contact_ids:
                         contact_id = contact_id[0], id2current_id[contact_id[0]]
                         if removed_id != donor_id:
+                            # means this is the last contact this node has
                             contact_n = 0
                         else:
                             removed_id = parent_id
+                        # If the notifier agrees and the contact is not yet removed, notify them
                         if (np.random.uniform(0, 1, 1)[0] < current_model.upsilon
                                 and contact_id not in id2time):
                             unnotified_contact_i = id2state[contact_id[0]]
+                            # The ids are organised as follows: s1, s2, ..., sm, s1-n, s2-n, ..., sm-n
+                            # Hence if we have an id >= m then the contact was already notified by someone else
                             if unnotified_contact_i < num_states // 2:
                                 notified_contact_i = num_states // 2 + unnotified_contact_i
                                 id2state[contact_id[0]] = notified_contact_i
@@ -258,6 +265,23 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
     return root, max_time
 
 
+def check_skyline_times(skyline_times, n_models):
+    if skyline_times is None:
+        raise ValueError("For skyline models, skyline_times must be provided")
+    if len(skyline_times) != n_models - 1:
+        raise ValueError(
+            f"For skyline models, skyline_times must have length = len(models)-1 (since model[0] always starts at time 0). "
+            f"Got {n_models} models and {len(skyline_times)} time points.")
+    # Verify that times are sorted
+    for i in range(len(skyline_times) - 1):
+        if skyline_times[i] >= skyline_times[i + 1]:
+            raise ValueError(
+                f"Time points must be in ascending order. "
+                f"Found skyline_times[{i}] = {skyline_times[i]} >= skyline_times[{i + 1}] = {skyline_times[i + 1]}")
+    if skyline_times[0] <= 0:
+        raise ValueError(f"The first model change time must be greater than zero, got {skyline_times[0]} instead.")
+
+
 def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_feature=STATE):
     if not sampled_id2state:
         return None
@@ -266,6 +290,8 @@ def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_featu
     id2node = {}
     for node_id, state in sampled_id2state.items():
         time = id2time[node_id]
+        # if there is PN it could be
+        # that we decided to stop at an earlier time when the unsampled contact proportion was lower
         if time > max_time:
             continue
         node = TreeNode(dist=time - (0 if node_id not in id2parent else id2time[id2parent[node_id]]), name=node_id[0])
@@ -346,7 +372,8 @@ def random_pop(elements):
     return element
 
 
-def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, keep_nones=False, state_feature=STATE,state_frequencies=None, ltt=False, max_notified_contacts=1):
+def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, keep_nones=False, state_feature=STATE,
+                    state_frequencies=None, ltt=False, max_notified_contacts=1):
     total_n_tips = 0
     forest = []
     total_trees = 0
@@ -354,7 +381,9 @@ def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, 
     res_ltt = None
     while total_n_tips < min_tips:
         if ltt:
-            tree, cur_ltt, _ = simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time, ltt=True,state_feature=state_feature, state_frequencies=state_frequencies,max_notified_contacts=max_notified_contacts)
+            tree, cur_ltt, _ = simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time, ltt=True,
+                                                       state_feature=state_feature, state_frequencies=state_frequencies,
+                                                       max_notified_contacts=max_notified_contacts)
             if res_ltt is None:
                 res_ltt = cur_ltt
             else:
@@ -369,7 +398,9 @@ def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, 
                         prev_res = res_ltt[time]
                     res_ltt[time] = total
         else:
-            tree, _ = simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time,state_feature=state_feature, state_frequencies=state_frequencies,max_notified_contacts=max_notified_contacts)
+            tree, _ = simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time,
+                                              state_feature=state_feature, state_frequencies=state_frequencies,
+                                              max_notified_contacts=max_notified_contacts)
         total_trees += 1
         if tree:
             total_n_tips += len(tree)
@@ -390,9 +421,10 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
     For a tree simulation, if --min_tips and --max_tips are equal, exactly that number of tips will be simulated.
     If --min_tips is less than --max_tips, a value randomly drawn between one and another will be simulated.
 
-    :param models: MTBD model or list of MTBD models for skyline simulation
-    :type models: Union[treesimulator.mtbd_models.Model, list]
-    :param skyline_times: list of time points where model parameters change (length should be len(models)-1)
+    :param models: MTBD model (or list of MTBD models for Skyline simulation -- to be used with skyline_times)
+    :type models: Union[treesimulator.mtbd_models.Model, list(treesimulator.mtbd_models.Model)]
+    :param skyline_times: list of time points where model parameters change for Skyline models
+        (length should be len(models)-1)
     :type skyline_times: list(float)
     :param min_tips: desired minimal bound on the total number of simulated leaves
     :type min_tips: int
@@ -420,20 +452,26 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
 
     if T < np.inf:
         while True:
-            forest, ltt = generate_forest(models, skyline_times=skyline_times, max_time=T, min_tips=min_tips,keep_nones=True, state_frequencies=state_frequencies, ltt=True,max_notified_contacts=max_notified_contacts)
+            forest, ltt = generate_forest(models, skyline_times=skyline_times, max_time=T, min_tips=min_tips,
+                                          keep_nones=True, state_frequencies=state_frequencies, ltt=True,
+                                          max_notified_contacts=max_notified_contacts)
             total_trees = len(forest)
             forest = [tree for tree in forest if tree is not None]
             fl = len(forest)
             u = total_trees - fl
             total_tips = sum(len(list(t.iter_leaves())) for t in forest)
             if total_tips <= max_tips:
-                logging.info('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time T={}.'
-                             .format(fl, u, total_tips, T))
+                logging.info(f'Generated a forest of {fl} visible and {u} hidden trees '
+                             f'with {total_tips} sampled tips over time T={T}.')
                 return forest, (total_tips, u, T), ltt
-            logging.debug('Generated a forest of {} visible and {} hidden trees with {} sampled tips over time T={}.'.format(fl, u, total_tips, T))
+            logging.debug(f'Generated a forest of {fl} visible and {u} hidden trees '
+                          f'with {total_tips} sampled tips over time T={T}.')
     else:
         while True:
-            tree, ltt, max_time = simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=np.inf,max_sampled=max_tips, min_sampled=min_tips,state_frequencies=state_frequencies, ltt=True,max_notified_contacts=max_notified_contacts)
+            tree, ltt, max_time = simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=np.inf,
+                                                          max_sampled=max_tips, min_sampled=min_tips,
+                                                          state_frequencies=state_frequencies, ltt=True,
+                                                          max_notified_contacts=max_notified_contacts)
             total_tips = len(tree) if tree else 0
             if total_tips >= min_tips:
                 logging.info('Generated a tree with {} sampled tips over time T={}.'.format(total_tips, max_time))
