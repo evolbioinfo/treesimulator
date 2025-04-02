@@ -393,16 +393,16 @@ print(bd_model.get_epidemiological_parameters())
 [bd_tree], _, _ = generate([bd_model], min_tips=200, max_tips=500)
 save_forest([bd_tree], 'BD_tree.nwk')
 ## Adding -CT to the model above
-bdct_model = CTModel(model=bd_model, upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=1)
-[bdct_tree], _, _ = generate([bdct_model], min_tips=200, max_tips=500)
+bdct_model = CTModel(model=bd_model, upsilon=0.2, phi=2.5)
+[bdct_tree], _, _ = generate([bdct_model], min_tips=200, max_tips=500, max_notified_contacts=1)
 save_forest([bdct_tree], 'BDCT_tree.nwk')
 ## BD-CT(1)-Skyline models
-bdct_model_1 = CTModel(BirthDeathModel(p=0.5, la=0.5, psi=0.25), 
-                       upsilon=0, notified_removal_rate=2.5, max_notified_contacts=1)
-bdct_model_2 = CTModel(BirthDeathModel(p=0.75, la=1, psi=0.25), 
-                       upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=1)
-[bdct_skyline_tree], _, _ = generate([bdct_model_1, bdct_model_2], skyline_times=[3], 
-                             min_tips=200, max_tips=500)
+bdct_model_1 = CTModel(BirthDeathModel(p=0.5, la=0.5, psi=0.25),
+                       upsilon=0, phi=2.5)
+bdct_model_2 = CTModel(BirthDeathModel(p=0.75, la=1, psi=0.25),
+                       upsilon=0.2, phi=2.5)
+[bdct_skyline_tree], _, _ = generate([bdct_model_1, bdct_model_2], skyline_times=[3],
+                                     min_tips=200, max_tips=500, max_notified_contacts=1)
 save_forest([bdct_skyline_tree], 'BDCTSkyline_tree.nwk')
 
 # BDEI, BDEI-CT(2) and BDEI-CT(2)-Skyline
@@ -412,30 +412,32 @@ print(bdei_model.get_epidemiological_parameters())
 [bdei_tree], _, _ = generate([bdei_model], min_tips=200, max_tips=500)
 save_forest([bdei_tree], 'BDEI_tree.nwk')
 ## Adding -CT to the model above
-bdeict_model = CTModel(model=[bdei_model], upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=2)
-[bdeict_tree], _, _ = generate(bdeict_model, min_tips=200, max_tips=500)
+bdeict_model = CTModel(model=bdei_model, upsilon=0.2, phi=2.5)
+[bdeict_tree], _, _ = generate([bdeict_model], min_tips=200, max_tips=500, max_notified_contacts=2)
 save_forest([bdeict_tree], 'BDEICT_tree.nwk')
 ## BDEI-CT(2)-Skyline with three time intervals
-bdeict_model_1 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.2, mu=1, la=0.5, psi=0.25), upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=2)
-bdeict_model_2 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.3, mu=1, la=0.5, psi=0.3), upsilon=0.3, notified_removal_rate=2.5, max_notified_contacts=2)
-bdeict_model_3 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.5, mu=1, la=0.5, psi=0.5), upsilon=0.3, notified_removal_rate=5, max_notified_contacts=2)
-[bdeict_skyline_tree], _, _ = generate([bdeict_model_1, bdeict_model_2, bdeict_model_3], skyline_times=[2, 3], min_tips=200, max_tips=500)
+bdeict_model_1 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.2, mu=1, la=0.5, psi=0.25), upsilon=0.2, phi=2.5)
+bdeict_model_2 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.3, mu=1, la=0.5, psi=0.3), upsilon=0.3, phi=2.5)
+bdeict_model_3 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.5, mu=1, la=0.5, psi=0.5), upsilon=0.3, phi=5)
+[bdeict_skyline_tree], _, _ = generate([bdeict_model_1, bdeict_model_2, bdeict_model_3], skyline_times=[2, 3],
+                                       min_tips=200, max_tips=500, max_notified_contacts=2)
 save_forest([bdeict_skyline_tree], 'BDEICTSkyline_tree.nwk')
 
 # BDSS, BDSS-CT(3) and BDSS-CT(3)-Skyline
 ## BDSS model
 bdss_model = BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.1, la_ns=0.3, la_sn=0.5, la_ss=1.5, psi=0.25)
 print(bdss_model.get_epidemiological_parameters())
-[bdss_tree], _, _ = generate(bdss_model, min_tips=200, max_tips=500)
+[bdss_tree], _, _ = generate([bdss_model], min_tips=200, max_tips=500)
 save_forest([bdss_tree], 'BDSS_tree.nwk')
 ## Adding -CT to the model above
-bdssct_model = CTModel(model=bdss_model, upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=3)
-[bdssct_tree], _, _ = generate(bdssct_model, min_tips=200, max_tips=500)
+bdssct_model = CTModel(model=bdss_model, upsilon=0.2, phi=2.5)
+[bdssct_tree], _, _ = generate([bdssct_model], min_tips=200, max_tips=500, max_notified_contacts=3)
 save_forest([bdssct_tree], 'BDSSCT_tree.nwk')
 ## BDSS-CT(3)-Skyline with two time intervals, using the model above for the first interval
-bdssct_model_2 = CTModel(model=BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.1, la_ns=0.3, la_sn=1, la_ss=3, psi=0.25), 
-                         upsilon=0.5, notified_removal_rate=5, max_notified_contacts=2)
-[bdssct_skyline_tree], _, _ = generate([bdssct_model, bdssct_model_2], skyline_times=[2], min_tips=200, max_tips=500)
+bdssct_model_2 = CTModel(model=BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.1, la_ns=0.3, la_sn=1, la_ss=3, psi=0.25),
+                         upsilon=0.5, phi=5)
+[bdssct_skyline_tree], _, _ = generate([bdssct_model, bdssct_model_2], skyline_times=[2], min_tips=200, max_tips=500,
+                                       max_notified_contacts=3)
 save_forest([bdssct_skyline_tree], 'BDSSCTSkyline_tree.nwk')
 
 # MTBD, MTBD-CT(1) and MTBD-CT(1)-Skyline
@@ -443,18 +445,19 @@ save_forest([bdssct_skyline_tree], 'BDSSCTSkyline_tree.nwk')
 mtbd_model = Model(states=['A', 'B'], transition_rates=[[0.5, 0.6], [0.7, 0.8]],
                    transmission_rates=[[0.1, 0.2], [0.3, 0.4]],
                    removal_rates=[0.05, 0.08], ps=[0.15, 0.65])
-[mtbd_tree], _, _ = generate(mtbd_model, min_tips=200, max_tips=500)
+[mtbd_tree], _, _ = generate([mtbd_model], min_tips=200, max_tips=500)
 save_forest([mtbd_tree], 'MTBD_tree.nwk')
 ## Adding -CT to the model above
-mtbdct_model = CTModel(model=mtbd_model, upsilon=0.2, notified_removal_rate=2.5, max_notified_contacts=1)
-[mtbdct_tree], _, _ = generate(mtbdct_model, min_tips=200, max_tips=500)
+mtbdct_model = CTModel(model=mtbd_model, upsilon=0.2, phi=2.5)
+[mtbdct_tree], _, _ = generate([mtbdct_model], min_tips=200, max_tips=500, max_notified_contacts=1)
 save_forest([mtbdct_tree], 'MTBDCT_tree.nwk')
 ## MTBD-CT(1)-Skyline with two time intervals, using the model above for the first interval
 mtbdct_model_2 = CTModel(model=Model(states=['A', 'B'], transition_rates=[[1.5, 1.6], [1.7, 1.8]],
                                      transmission_rates=[[1.1, 1.2], [1.3, 1.4]],
-                                     removal_rates=[1.05, 1.08], ps=[0.1, 0.6]), 
-                         upsilon=0.4, notified_removal_rate=3.5, max_notified_contacts=1)
-[mtbdct_skyline_tree], _, _ = generate([mtbdct_model, mtbdct_model_2], skyline_times=[8], min_tips=200, max_tips=500)
+                                     removal_rates=[1.05, 1.08], ps=[0.1, 0.6]),
+                         upsilon=0.4, phi=3.5)
+[mtbdct_skyline_tree], _, _ = generate([mtbdct_model, mtbdct_model_2], skyline_times=[8],
+                                       min_tips=200, max_tips=500, max_notified_contacts=1)
 save_forest([mtbdct_skyline_tree], 'MTBDCTSkyline_tree.nwk')
 ```
 
