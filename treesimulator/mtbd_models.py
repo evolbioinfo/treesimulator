@@ -340,7 +340,20 @@ class CTModel(Model):
         * phi -- the removal rate after being notified
     """
 
-    def __init__(self, model, phi=np.inf, upsilon=0.5, *args, **kwargs):
+    def __init__(self, model, phi=np.inf, upsilon=0.5, allow_irremovable_states=False, *args, **kwargs):
+        """
+        
+        :param model: initial model, whose states will now be contact-traced
+        :param phi: sampling rate after being notified
+        :param upsilon: probability to notify a contact upon sampling
+        :param allow_irremovable_states: if set to True and the initial model included "irremovable" states
+            (i.e., whose removal rate was zero, e.g., E in the BDEI model), then even after notification 
+            their removal rate will stay zero, and the corresponding individuals will become "removable" (at a rate phi)
+            only once they change the state to a "removable" one (e.g., from E-notified to I-notified in BDEI-CT).
+            By default, allow_irremovable_states is False and all states become "removable" once notified.
+        :param args: 
+        :param kwargs: 
+        """
         transition_rates = np.pad(model.transition_rates, ((0, model.transition_rates.shape[0]),
                                                            (0, model.transition_rates.shape[1])),
                                   mode='constant', constant_values=0)
@@ -352,11 +365,19 @@ class CTModel(Model):
         transmission_rates[model.transmission_rates.shape[0]:, :model.transmission_rates.shape[1]] \
             = model.transmission_rates
         pis = np.pad(model.state_frequencies, (0, model.state_frequencies.shape[0]), mode='constant', constant_values=0)
+        n_removal_rates = model.removal_rates.shape[0]
+        removal_rates = np.pad(model.removal_rates, (0, n_removal_rates), mode='constant', constant_values=phi)
+        if allow_irremovable_states:
+            # If there was no way to remove a certain state (e.g. E in BDEI), 
+            # then notification should not change its "irremovable" status
+            mask = np.zeros(2 * n_removal_rates, dtype=bool)
+            mask[n_removal_rates:] = (model.removal_rates == 0)
+            removal_rates[mask] = 0
+    
         Model.__init__(self, states=[_ for _ in model.states] + ['{}n'.format(_) for _ in model.states],
                        transition_rates=transition_rates,
                        transmission_rates=transmission_rates,
-                       removal_rates=np.pad(model.removal_rates, (0, model.removal_rates.shape[0]),
-                                            mode='constant', constant_values=phi),
+                       removal_rates=removal_rates,
                        ps=np.pad(model.ps, (0, model.ps.shape[0]), mode='constant', constant_values=1),
                        n_recipients=np.concatenate([model.n_recipients, model.n_recipients]),
                        state_frequencies=pis,

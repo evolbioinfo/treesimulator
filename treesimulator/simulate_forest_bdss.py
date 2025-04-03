@@ -62,6 +62,13 @@ def main():
                         help='List of notified removal rates (one per skyline interval). Only used if upsilon is specified.')
     parser.add_argument('--max_notified_contacts', required=False, default=1, type=int,
                         help='Maximum notified contacts')
+    parser.add_argument('--allow_irremovable_states', action='store_true', default=False,
+                        help='If specified and the initial model included "irremovable" states '
+                             '(i.e., whose removal rate was zero, e.g., E in the BDEI model), '
+                             'then even after notification their removal rate will stay zero, '
+                             'and the corresponding individuals will become "removable" (at a rate phi) '
+                             'only once they change the state to a "removable" one '
+                             '(e.g., from E-notified to I-notified in BDEI-CT).')
 
     parser.add_argument('--avg_recipients', nargs=2, default=[1, 1], type=float,
                         help='average number of recipients per transmission '
@@ -116,7 +123,8 @@ def main():
                                                   la_sn=params.la_sn[i], la_ss=params.la_ss[i],
                                                   psi=params.psi[i], n_recipients=[params.avg_recipients])
         if is_ct:
-            model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i])
+            model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i],
+                            allow_irremovable_states=params.allow_irremovable_states)
         models.append(model)
 
     forest, (total_tips, u, T), ltt = generate(models, skyline_times=params.skyline_times,
