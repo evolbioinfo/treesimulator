@@ -2,12 +2,12 @@ import logging
 import numpy as np
 from treesimulator import save_forest, save_log, save_ltt
 from treesimulator.generator import generate, observed_ltt
-from treesimulator.mtbd_models import BirthDeathWithSuperSpreadingModel, CTModel
+from treesimulator.mtbd_models import BirthDeathExposedInfectiousWithSuperSpreadingModel, CTModel
 
 
 def main():
     """
-    Entry point for tree/forest generation with the BDSS-CT-Skyline model with command-line arguments.
+    Entry point for tree/forest generation with the BDEISS-CT-Skyline model with command-line arguments.
 
     For skyline models, the first model (models[0]) always starts at time 0, and the time points list
     specifies when to switch to each subsequent model.
@@ -17,7 +17,7 @@ def main():
 
     parser = \
         argparse.ArgumentParser(
-            description="Simulates a tree (or a forest of trees) for given BDSS-CT-Skyline model parameters. "
+            description="Simulates a tree (or a forest of trees) for given BDEISS-CT-Skyline model parameters. "
                         "If a simulation leads to less than --min_tips tips, it is repeated.")
     parser.add_argument('--min_tips', required=True, type=int,
                         help="desired minimal bound on the total number of simulated leaves. "
@@ -37,14 +37,14 @@ def main():
                              "till the --min_tips number is reached. If after simulating the last tree, "
                              "the forest exceeds the --max_tips number, the process will be restarted.")
 
-    parser.add_argument('--la_nn', required=True, nargs='+', type=float,
-                        help="List of normal spreader-to-normal spreader transmission rates (one per skyline interval).")
-    parser.add_argument('--la_ns', required=True, nargs='+', type=float,
-                        help="List of normal spreader-to-superspreader transmission rates (one per skyline interval).")
-    parser.add_argument('--la_sn', required=True, nargs='+', type=float,
-                        help="List of superspreader-to-normal spreader transmission rates (one per skyline interval).")
-    parser.add_argument('--la_ss', required=True, nargs='+', type=float,
-                        help="List of superspreader-to-superspreader transmission rates (one per skyline interval).")
+    parser.add_argument('--mu_n', required=True, nargs='+', type=float,
+                        help="List of exposed-to-normal spreader state change rates (one per skyline interval).")
+    parser.add_argument('--mu_s', required=True, nargs='+', type=float,
+                        help="List of exposed-to-super spreader state change rates (one per skyline interval).")
+    parser.add_argument('--la_n', required=True, nargs='+', type=float,
+                        help="List of transmission rates from normal spreaders (one per skyline interval).")
+    parser.add_argument('--la_s', required=True, nargs='+', type=float,
+                        help="List of transmission rates from super spreaders (one per skyline interval).")
     parser.add_argument('--psi', required=True, nargs='+', type=float,
                         help="List of removal rates (one per skyline interval).")
     parser.add_argument('--p', required=True, nargs='+', type=float,
@@ -64,11 +64,11 @@ def main():
                         help='Maximum notified contacts')
     parser.add_argument('--allow_irremovable_states', action='store_true', default=False,
                         help='If specified and the initial model included "irremovable" states '
-                             '(i.e., whose removal rate was zero, e.g., E in the BDEI model), '
+                             '(i.e., whose removal rate was zero, e.g., E), '
                              'then even after notification their removal rate will stay zero, '
                              'and the corresponding individuals will become "removable" (at a rate phi) '
                              'only once they change the state to a "removable" one '
-                             '(e.g., from E-notified to I-notified in BDEI-CT).')
+                             '(e.g., from E-notified to I-notified).')
 
     parser.add_argument('--avg_recipients', nargs=2, default=[1, 1], type=float,
                         help='average number of recipients per transmission '
@@ -86,15 +86,15 @@ def main():
                         format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
     # Check that all parameter arrays have the same length
-    n_models = len(params.la_nn)
-    if (n_models != len(params.la_ns) or n_models != len(params.la_sn) or n_models != len(params.la_ss)
+    n_models = len(params.la_n)
+    if (n_models != len(params.la_s) or n_models != len(params.mu_n) or n_models != len(params.mu_s)
             or n_models != len(params.psi) or n_models != len(params.p)):
-        raise ValueError("All parameter lists (la_nn, la_ns, la_sn, la_ss, psi, p) must have the same length")
+        raise ValueError("All parameter lists (mu_n, mu_s, la_n, la_s, psi, p) must have the same length")
     is_ct = params.upsilon
     if is_ct:
         if n_models != len(params.upsilon) or n_models != len(params.phi):
             raise ValueError("Contact-tracing parameter lists must have the same length "
-                             "as the other parameter lists (la, psi, p)")
+                             "as the other parameter lists (mu, la, psi, p)")
 
     if n_models > 1 and (not params.skyline_times or len(params.skyline_times) != n_models - 1):
         raise ValueError(f'One should specify {n_models - 1} skyline times for {n_models}, '
@@ -107,21 +107,22 @@ def main():
 
     models = []
     for i in range(n_models):
-        logging.info('{}BDSS{}{} model parameters are:'
-                     '\n\tlambda_nn={}\n\tlambda_ns={}\n\tlambda_sn={}\n\tlambda_ss={}\n\tpsi={}\n\tp={}{}{}'
+        logging.info('{}BDEISS{}{} model parameters are:'
+                     '\n\tmu_n={}\n\tmu_s={}\n\tlambda_n={}\n\tlambda_s={}\n\tpsi={}\n\tp={}{}{}'
                      .format('For time interval {}-{},\n'.format(0 if i == 0 else params.skyline_times[i - 1],
                                                                  params.skyline_times[i] if i < (n_models - 1) else '...')
                              if n_models > 1 else '',
                              '-MULT' if is_mult else '',
                              '-CT' if is_ct else '',
-                             params.la_nn[i], params.la_ns[i], params.la_sn[i], params.la_ss[i],
+                             params.mu_n[i], params.mu_s[i], params.la_n[i], params.la_s[i],
                              params.psi[i], params.p[i],
                              '\n\tavg_recipient_number_n={}\n\tavg_recipient_number_s={}'.format(*params.avg_recipients) if is_mult else '',
                              '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
-        model = BirthDeathWithSuperSpreadingModel(p=params.p[i],
-                                                  la_nn=params.la_nn[i], la_ns=params.la_ns[i],
-                                                  la_sn=params.la_sn[i], la_ss=params.la_ss[i],
-                                                  psi=params.psi[i], n_recipients=params.avg_recipients)
+        model = BirthDeathExposedInfectiousWithSuperSpreadingModel(p=params.p[i],
+                                                                   mu_n=params.mu_n[i], mu_s=params.mu_s[i],
+                                                                   la_n=params.la_n[i], la_s=params.la_s[i],
+                                                                   psi=params.psi[i],
+                                                                   n_recipients=np.concatenate([[1], params.avg_recipients]))
         if is_ct:
             model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i],
                             allow_irremovable_states=params.allow_irremovable_states)

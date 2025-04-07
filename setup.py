@@ -13,7 +13,7 @@ setup(
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    version='0.2.7',
+    version='0.2.8',
     description='Simulation of rooted phylogenetic trees under a given Multi-Type Birth–Death model (with or without Contact Tracing) (with or without a Skyline).',
     author='Anna Zhukova',
     author_email='anna.zhukova@pasteur.fr',
@@ -27,6 +27,7 @@ setup(
                 'generate_bd = treesimulator.simulate_forest_bd:main',
                 'generate_bdei = treesimulator.simulate_forest_bdei:main',
                 'generate_bdss = treesimulator.simulate_forest_bdss:main',
+                'generate_bdeiss = treesimulator.simulate_forest_bdeiss:main',
                 'generate_mtbd = treesimulator.simulate_forest:main',
             ]
     },

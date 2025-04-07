@@ -38,7 +38,7 @@ def save_log(models, skyline_times, total_tips, T, u, log, kappa=0):
     skyline_times += [T]
     is_ct = isinstance(models[0], CTModel)
     with open(log, 'w+') as f:
-        keys = sorted(models[0].get_epidemiological_parameters().keys())
+        keys = models[0].get_epidemiological_parameters().keys()
         f.write('{}{},tips,hidden_trees,end_time\n'.format(','.join(keys), ',kappa' if is_ct else ''))
         for model, end_time in zip(models, skyline_times):
             tips = '' if end_time < T else total_tips
