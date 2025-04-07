@@ -194,7 +194,7 @@ def main():
                                                max_notified_contacts=params.max_notified_contacts)
 
     save_forest(forest, params.nwk)
-    save_log(models, params.skyline_times, total_tips, T, u, params.log)
+    save_log(models, params.skyline_times, total_tips, T, u, params.log, kappa=params.max_notified_contacts)
     if params.ltt:
         save_ltt(ltt, observed_ltt(forest, T), params.ltt)
 

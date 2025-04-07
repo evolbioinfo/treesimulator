@@ -120,7 +120,8 @@ def main():
 
     forest, (total_tips, u, T), ltt = generate(models, skyline_times=params.skyline_times,
                                                min_tips=params.min_tips, max_tips=params.max_tips, T=params.T,
-                                               max_notified_contacts=params.max_notified_contacts)
+                                               max_notified_contacts=params.max_notified_contacts,
+                                               kappa=params.max_notified_contacts)
 
     save_forest(forest, params.nwk)
     save_log(models, params.skyline_times, total_tips, T, u, params.log)
