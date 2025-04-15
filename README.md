@@ -37,7 +37,7 @@ where 0 ≤ π<sub>i</sub> ≤ 1 and π<sub>1</sub> + ... + π<sub>m</sub> = 1.
 
 The MTBD model has the following epidemiological parameters:
 
-* R<sub>i</sub> = Σ<sub>1≤j≤m</sub> λ<sub>ij</sub>/ψλ<sub>i</sub> -- reproduction number of state i
+* R<sub>i</sub> = (Σ<sub>1≤j≤m</sub> λ<sub>ij</sub>)/ψ<sub>i</sub> -- reproduction number of state i
 * 1/ψ<sub>i</sub> -- infectious time of state i
 * R = Σ<sub>1≤i≤m</sub> π<sub>i</sub> R<sub>i</sub> -- average reproduction number
 
