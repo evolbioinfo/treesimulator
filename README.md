@@ -68,8 +68,9 @@ The same κ value is shared among all the skyline -CT models.
 
 
 We pay particular interest to the classical BD model, the BD Exposed-Infectious (BDEI) model, 
-and BD with superspreading (BDSS), 
-as they are described in [[Voznica _et al._ 2021]]((https://www.biorxiv.org/content/10.1101/2021.03.11.435006v1)), and to their -CT(κ) versions.
+and BD with super-spreading (BDSS), 
+as they are described in [[Voznica _et al._ 2021]](https://www.biorxiv.org/content/10.1101/2021.03.11.435006v1), 
+and to their -CT(κ) versions.
 
 
 ## BD
