@@ -32,6 +32,16 @@ m removal (becoming non-infectious) rate parameters:
 m sampling probability upon removal parameters:
 * p<sub>i</sub> -- probability to sample the pathogen of an individual in state i upon removal (1 ≤ i ≤ m), where 0 < p<sub>i</sub> ≤ 1
 
+Using these probabilities, one can calculate the equilibrium frequencies $π<sub>i</sub>$ of the model's states, 
+where 0 ≤ π<sub>i</sub> ≤ 1 and π<sub>1</sub> + ... + π<sub>m</sub> = 1.
+
+The MTBD model has the following epidemiological parameters:
+
+* R<sub>i</sub> = Σ<sub>1≤j≤m</sub> λ<sub>ij</sub>/ψλ<sub>i</sub> -- reproduction number of state i
+* 1/ψ<sub>i</sub> -- infectious time of state i
+* R = Σ<sub>1≤i≤m</sub> π<sub>i</sub> R<sub>i</sub> -- average reproduction number
+
+
 ## Contact Tracing (CT)
 Contact tracing adds two parameters to the initial MTBD model:
 
@@ -39,6 +49,10 @@ Contact tracing adds two parameters to the initial MTBD model:
 * φ -- notified contact removal and sampling rate: φ >> ψ<sub>i</sub> ∀i (1 ≤ i ≤ m). The pathogen of a notified contact is sampled automatically (with a probability of 1) upon removal. 
 
 and a meta-parameter κ, which defines how many most recent contacts can be notified by each index case. Each is notified independently, with the probability υ.
+
+CT adds the following epidemiological parameter:
+
+* 1/φ -- notified contact removal time
 
 ## Skyline
 Skyline was introduced by Stadler _et al._ [[PNAS 2013]](https://doi.org/10.1073/pnas.1207965110) 
@@ -64,10 +78,6 @@ as they are described in [[Voznica _et al._ 2021]]((https://www.biorxiv.org/cont
 * ψ -- removal rate
 * p -- sampling probability upon removal
 
-Epidemiological parameters:
-* R<sub>0</sub>=λ/ψ -- reproduction number
-* 1/ψ -- infectious time
-
 
 ## BD-CT(κ)
 5 parameters:
@@ -77,11 +87,6 @@ Epidemiological parameters:
 * υ -- probability to notify contacts upon sampling
 * φ -- notified contact removal and sampling rate: φ >> ψ 
 
-
-Epidemiological parameters:
-* R<sub>0</sub>=λ/ψ -- reproduction number
-* 1/ψ -- infectious time
-* 1/φ -- notified contact removal time
 
 ## BDEI
 2 states: 
@@ -94,9 +99,7 @@ Epidemiological parameters:
 * ψ -- removal rate of I
 * p -- sampling probability upon removal
 
-Epidemiological parameters:
-* R<sub>0</sub>=λ/ψ -- reproduction number
-* 1/ψ -- infectious time
+BDEI-specific epidemiological parameter:
 * 1/μ -- incubation period
 
 
@@ -113,18 +116,12 @@ Epidemiological parameters:
 * υ -- probability to notify contacts upon sampling
 * φ -- notified contact removal and sampling rate: φ >> ψ 
 
-Epidemiological parameters:
-* R<sub>0</sub>=λ/ψ -- reproduction number
-* 1/ψ -- infectious time
-* 1/μ -- incubation period
-* 1/φ -- notified contact removal time
-
 ## BDSS
-2 compartments: 
+2 states: 
 * N, standard infectious individual
 * S, superspreader
 
-6 parameters:
+5(+1) parameters:
 * λ<sub>nn</sub> -- transmission rate from N to N
 * λ<sub>ns</sub> -- transmission rate from N to S
 * λ<sub>sn</sub> -- transmission rate from S to N
@@ -134,9 +131,7 @@ Epidemiological parameters:
 * ψ -- removal rate of S and of N (the same)
 * p -- sampling probability upon removal (the same for N and S)
 
-Epidemiological parameters:
-* R<sub>0</sub>=(λ<sub>nn</sub> + λ<sub>ss</sub>)/ψ -- reproduction number
-* 1/ψ -- infectious time
+BDSS-specific epidemiological parameters:
 * X=λ<sub>ss</sub>/λ<sub>ns</sub>=λ<sub>sn</sub>/λ<sub>nn</sub> -- super-spreading transmission ratio
 * f=λ<sub>ss</sub>/(λ<sub>sn</sub> + λ<sub>ss</sub>) -- super-spreading fraction
 
@@ -145,7 +140,7 @@ Epidemiological parameters:
 * N, standard infectious individual
 * S, superspreader
 
-8 parameters:
+7(+1) parameters:
 * λ<sub>nn</sub> -- transmission rate from N to N
 * λ<sub>ns</sub> -- transmission rate from N to S
 * λ<sub>sn</sub> -- transmission rate from S to N
@@ -157,12 +152,42 @@ Epidemiological parameters:
 * υ -- probability to notify contacts upon sampling
 * φ -- notified contact removal and sampling rate: φ >> ψ 
 
-Epidemiological parameters:
-* R<sub>0</sub>=(λ<sub>nn</sub> + λ<sub>ss</sub>)/ψ -- reproduction number
-* 1/ψ -- infectious time
-* X=λ<sub>ss</sub>/λ<sub>ns</sub>=λ<sub>sn</sub>/λ<sub>nn</sub> -- super-spreading transmission ratio
-* f=λ<sub>ss</sub>/(λ<sub>sn</sub> + λ<sub>ss</sub>) -- super-spreading fraction
-* 1/φ -- notified contact removal time
+
+## BDEISS
+3 states: 
+* E, exposed, i.e. infected but not yet infectious
+* N, standard infectious individual
+* S, infectious superspreader 
+
+6 parameters:
+* μ<sub>n</sub> -- transition rate from E to N (becoming infectious for normal spreaders)
+* μ<sub>s</sub> -- transition rate from E to S (becoming infectious for superspreaders)
+* λ<sub>n</sub> -- transmission rate from N to E
+* λ<sub>s</sub> -- transmission rate from S to E
+* ψ -- removal rate of S and of N (the same)
+* p -- sampling probability upon removal (the same for N and S)
+
+BDEISS-specific epidemiological parameters:
+* X=λ<sub>s</sub>/λ<sub>n</sub> -- super-spreading transmission ratio
+* f=μ<sub>s</sub>/(μ<sub>n</sub> + μ<sub>s</sub>) -- super-spreading fraction (among infectious individuals)
+* 1/(μ<sub>n</sub> + μ<sub>s</sub>) -- incubation period
+
+
+## BDEISS-CT(κ)
+3 states: 
+* E, exposed, i.e. infected but not yet infectious
+* N, standard infectious individual
+* S, superspreader
+
+8 parameters:
+* μ<sub>n</sub> -- transition rate from E to N (becoming infectious for normal spreaders)
+* μ<sub>s</sub> -- transition rate from E to S (becoming infectious for superspreaders)
+* λ<sub>n</sub> -- transmission rate from N to E
+* λ<sub>s</sub> -- transmission rate from S to E
+* ψ -- removal rate of S and of N (the same)
+* p -- sampling probability upon removal (the same for N and S)
+* υ -- probability to notify contacts upon sampling
+* φ -- notified contact removal and sampling rate: φ >> ψ 
 
 
 ## Installation
@@ -314,6 +339,45 @@ To see detailed options, run:
 generate_bdss --help
 ```
 
+
+#### BDEISS, BDEISS-CT(κ) and BDEISS-CT(κ)-Skyline
+The following command simulates a tree with 200-500 tips under the BDEISS model, 
+with μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.5, 
+and saves it to the file tree.nwk, while saving the parameters to the comma-separated file params.csv:
+```bash
+generate_bdeiss --min_tips 200 --max_tips 500 \
+--mu_n 0.1 --mu_s 0.3 --la_n 0.5 --la_s 1.5 --psi 0.25 --p 0.5 \
+--nwk tree.nwk --log params.csv
+```
+The following command simulates a tree with 200-500 tips under the BDEISS-CT(1) model, 
+with μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
+and allowing to notify the last contact of each sampled index case. 
+The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
+```bash
+generate_bdeiss --min_tips 200 --max_tips 500 \
+--mu_n 0.1 --mu_s 0.3 --la_n 0.5 --la_s 1.5 --psi 0.25 --p 0.5 \
+--phi 2.5 --upsilon 0.2 --max_notified_contacts 1 \
+--nwk tree.nwk --log params.csv
+```
+The following command simulates a tree with 200-500 tips under the BDSS-CT(1)-Skyline model with two time intervals, 
+with μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2
+between t=0 and t=2,
+and μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.2, φ=2.5, υ=0.5
+starting at t=2, 
+and allowing to notify the last contact of each sampled index case. 
+The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
+```bash
+generate_bdeiss --min_tips 200 --max_tips 500 \
+--mu_n 0.1 0.1 --mu_s 0.3 0.3 --la_n 0.5 0.5 --la_s 1.5 1.5 --psi 0.25 0.25 --p 0.5 0.2 \
+--phi 2.5 2.5 --upsilon 0.2 0.5 --max_notified_contacts 1 \
+--skyline_times 2 \
+--nwk tree.nwk --log params.csv
+```
+To see detailed options, run:
+```bash
+generate_bdss --help
+```
+
 #### User-defined MTBD, MTBD-CT(κ) and MTBD-CT(κ)-Skyline models
 The following command simulates a tree with 200-500 tips under a generic MTBD model, with two states A and B, 
 with μ<sub>aa</sub>=0.5, μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7, μ<sub>bb</sub>=0.8, 
@@ -385,7 +449,8 @@ To simulate trees with 200-500 tips under the above models and settings:
 ```python3
 from treesimulator.generator import generate
 from treesimulator import save_forest
-from treesimulator.mtbd_models import Model, BirthDeathModel, BirthDeathExposedInfectiousModel, BirthDeathWithSuperSpreadingModel, CTModel
+from treesimulator.mtbd_models import Model, BirthDeathModel, BirthDeathExposedInfectiousModel, \
+  BirthDeathWithSuperSpreadingModel, BirthDeathExposedInfectiousWithSuperSpreadingModel, CTModel
 
 # 1. BD, BD-CT(1) and BD-CT(1)-Skyline
 ## BD model
@@ -440,6 +505,23 @@ bdssct_model_2 = CTModel(model=BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.
 [bdssct_skyline_tree], _, _ = generate([bdssct_model, bdssct_model_2], skyline_times=[2], min_tips=200, max_tips=500,
                                        max_notified_contacts=3)
 save_forest([bdssct_skyline_tree], 'BDSSCTSkyline_tree.nwk')
+
+# BDEISS, BDEiSS-CT(1) and BDEISS-CT(1)-Skyline
+## BDEISS model
+bdeiss_model = BirthDeathExposedInfectiousWithSuperSpreadingModel(p=0.5, mu_n=0.1, mu_s=0.3, la_n=0.5, la_s=1.5, psi=0.25)
+print(bdeiss_model.get_epidemiological_parameters())
+[bdeiss_tree], _, _ = generate([bdeiss_model], min_tips=200, max_tips=500)
+save_forest([bdeiss_tree], 'BDEISS_tree.nwk')
+## Adding -CT to the model above
+bdeissct_model = CTModel(model=bdeiss_model, upsilon=0.2, phi=2.5)
+[bdeissct_tree], _, _ = generate([bdeissct_model], min_tips=200, max_tips=500, max_notified_contacts=1)
+save_forest([bdeissct_tree], 'BDEISSCT_tree.nwk')
+## BDEISS-CT(1)-Skyline with two time intervals, using the model above for the first interval
+bdeissct_model_2 = CTModel(model=BirthDeathExposedInfectiousWithSuperSpreadingModel(p=0.2, mu_n=0.1, mu_s=0.3, la_n=0.5, la_s=1.5, psi=0.25),
+                           upsilon=0.5, phi=5)
+[bdeissct_skyline_tree], _, _ = generate([bdeissct_model, bdeissct_model_2], skyline_times=[2], min_tips=200, max_tips=500,
+                                         max_notified_contacts=1)
+save_forest([bdeissct_skyline_tree], 'BDEISSCTSkyline_tree.nwk')
 
 # MTBD, MTBD-CT(1) and MTBD-CT(1)-Skyline
 ## MTBD model with two states: A and B
