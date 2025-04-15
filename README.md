@@ -43,7 +43,8 @@ The MTBD model has the following epidemiological parameters:
 
 
 ## Contact Tracing (CT)
-Contact tracing adds two parameters to the initial MTBD model:
+Contact tracing extension was introduced by Zhukova & Gascuel [[medRxiv 2024]](https://www.medrxiv.org/content/10.1101/2024.09.09.24313296v2). 
+It adds two parameters to the initial MTBD model:
 
 * υ -- probability to notify contacts upon sampling
 * φ -- notified contact removal and sampling rate: φ >> ψ<sub>i</sub> ∀i (1 ≤ i ≤ m). The pathogen of a notified contact is sampled automatically (with a probability of 1) upon removal. 
