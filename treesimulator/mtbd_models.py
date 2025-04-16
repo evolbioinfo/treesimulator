@@ -373,7 +373,7 @@ class BirthDeathExposedInfectiousWithSuperSpreadingModel(Model):
 
         result = Model.get_epidemiological_parameters(self)
         result[INFECTIOS_TIME] = 1 / self.removal_rates[1]
-        result[SS_TRANSMISSION_RATIO] = self.transmission_rates[1, 0] / self.transmission_rates[2, 0]
+        result[SS_TRANSMISSION_RATIO] = self.transmission_rates[2, 0] / self.transmission_rates[1, 0]
         result[SUPERSPREADING_FRACTION] = pis[2] / (pis[1] + pis[2])
 
         result[INCUBATION_PERIOD] = 1 / (self.transition_rates[0, 1] + self.transition_rates[0, 2])
