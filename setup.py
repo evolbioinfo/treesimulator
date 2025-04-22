@@ -21,7 +21,7 @@ setup(
     keywords=['phylogenetics', 'tree generator', 'multitype birth-death model', 'contact tracing', 'skyline',
               'MTBD', 'MTBD-CT', 'MTBD-Skyline', 'MTBD-CT-Skyline'],
     install_requires=['six', 'ete3', 'numpy', 'scipy'],
-    requires=['six', 'ete3', 'numpy', 'scipy'],
+    requires=['six', 'ete3', 'numpy', 'scipy', 'sympy'],
     entry_points={
             'console_scripts': [
                 'generate_bd = treesimulator.simulate_forest_bd:main',

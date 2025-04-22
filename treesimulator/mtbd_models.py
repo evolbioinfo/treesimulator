@@ -1,5 +1,10 @@
+import logging
+
 import numpy as np
 from scipy.optimize import fsolve
+
+import sympy
+
 
 CT_PROBABILITY = 'contact tracing probability'
 
@@ -14,7 +19,7 @@ INCUBATION_PERIOD = 'incubation period'
 INFECTIOS_TIME = 'infectious time'
 
 EXPOSED = 'e'
-INFECTED = 'i'
+INFECTIOUS = 'i'
 SUPERSPREADER = 's'
 
 SAMPLING = 'sampling'
@@ -73,25 +78,74 @@ class Model(object):
     def states(self):
         return self.__states
 
+    def _state_frequencies_with_sympy(self):
+        MU_IJ, LA_IJ, PSI_I = self.transition_rates, self.transmission_rates, self.removal_rates
+        LA_I_ = LA_IJ.sum(axis=1)
+        m = len(self.states)
+        PI_I = np.array(sympy.symbols(' '.join(f"x_{k}" for k in range(m))))
+        eqs = [sympy.Eq(PI_I.sum(), 1)]
+
+        # pi_k dN = dN_k
+        # dN = sum_i N_i sum_j la_ij dt - sum_i N_i psi_i dt = [sum_i (la_i_ - psi_i) pi_i] N dt,
+        #   where la_i_ = sum_j la_ij;
+        # dN_k = -N_k sum_j mu_kj dt + sum_j N_j mu_jk dt + sum_j N_j la_jk dt - N_k psi_k dt =
+        #   = [-pi_k (sum_j mu_kj + psi_k) + sum_j pi_j (mu_jk + la_jk)] N dt
+
+        for k in range(m - 1):
+            pi_k = PI_I[k]
+
+            dN_div_N_dt = PI_I.dot(LA_I_ - PSI_I)
+            dN_k_div_N_dt = -pi_k * (MU_IJ[k, :].sum() + PSI_I[k]) + PI_I.dot(MU_IJ[:, k] + LA_IJ[:, k])
+            eqs.append(sympy.Eq(pi_k * dN_div_N_dt - dN_k_div_N_dt, 0))
+
+
+
+        solution = sympy.solve(eqs)
+        if isinstance(solution, list):
+            solution = next((s for s in solution if all((_ >= 0) and (_ <= 1) for _ in s.values())), None)
+            if solution is None:
+                raise ValueError('Sympy could not find a solution')
+        self.__pis = np.array([float(solution[PI_I[k]]) for k in range(m)])
+
+    def _state_frequencies_with_scipy(self):
+        MU_IJ, LA_IJ, PSI_I = self.transition_rates, self.transmission_rates, self.removal_rates
+        LA_I_ = LA_IJ.sum(axis=1)
+        m = len(self.states)
+
+        def func(PI_I):
+            res = [PI_I.sum() - 1]
+
+            # pi_k dN = dN_k
+            # dN = sum_i N_i sum_j la_ij dt - sum_i N_i psi_i dt = [sum_i (la_i_ - psi_i) pi_i] N dt,
+            #   where la_i_ = sum_j la_ij;
+            # dN_k = -N_k sum_j mu_kj dt + sum_j N_j mu_jk dt + sum_j N_j la_jk dt - N_k psi_k dt =
+            #   = [-pi_k (sum_j mu_kj + psi_k) + sum_j pi_j (mu_jk + la_jk)] N dt
+            for k in range(m - 1):
+                pi_k = PI_I[k]
+                dN_div_N_dt = PI_I.dot(LA_I_ - PSI_I)
+                dN_k_div_N_dt = -pi_k * (MU_IJ[k, :].sum() + PSI_I[k]) + PI_I.dot(MU_IJ[:, k] + LA_IJ[:, k])
+                res.append(pi_k * dN_div_N_dt - dN_k_div_N_dt)
+            return res
+
+        self.__pis = np.round(fsolve(func, np.ones(m) / m), 6)
+
     @property
     def state_frequencies(self):
         if self.__pis is None:
-            MU, LA, PSI = self.transition_rates, self.transmission_rates, self.removal_rates
-            m = len(self.states)
-
-            def func(PI):
-                SIGMA = PI.dot(LA.sum(axis=1) - PSI)
-                res = [PI.sum() - 1]
-                for k in range(m - 1):
-                    pi_k = PI[k]
-                    res.append(pi_k * SIGMA + pi_k * (PSI[k] + MU[k, :].sum()) - PI.dot(MU[:, k] + LA[:, k]))
-                return res
-
-            self.__pis = fsolve(func, np.ones(m) / m)
-            try:
-                self.check_frequencies()
-            except ValueError:
-                self.__pis = np.ones(m) / m
+            if len(self.states) == 1:
+                self.__pis = np.array([1.])
+            else:
+                try:
+                    self._state_frequencies_with_sympy()
+                    self.check_frequencies()
+                except ValueError as e1:
+                    try:
+                        self._state_frequencies_with_scipy()
+                        self.check_frequencies()
+                    except ValueError as e2:
+                        logging.warning(f'Could not calculate the equillibrium frequencies due to {e1} and {e2}, '
+                                        'setting them to equal ones!')
+                        self.__pis = np.ones(m) / m
         return self.__pis
 
     def check_frequencies(self):
@@ -161,6 +215,8 @@ class Model(object):
             raise ValueError("Transition matrix shape is wrong, should be {}x{}.".format(n_states, n_states))
         if not np.all(self.transition_rates >= 0):
             raise ValueError("Transition rates cannot be negative")
+        if np.any(np.diag(self.transition_rates) != 0):
+            raise ValueError("Transition rates from the state to itself (i.e., diagonal transition rate matrix values) must be zero")
 
     def check_transmission_rates(self):
         n_states = len(self.states)
@@ -237,7 +293,7 @@ class BirthDeathExposedInfectiousModel(Model):
         psis = np.zeros(shape=2, dtype=np.float64)
         psis[1] = psi
 
-        Model.__init__(self, states=[EXPOSED, INFECTED],
+        Model.__init__(self, states=[EXPOSED, INFECTIOUS],
                        transition_rates=mus, transmission_rates=las, removal_rates=psis, ps=[0, p],
                        *args, **kwargs)
 
@@ -276,7 +332,7 @@ class BirthDeathModel(Model):
         :param p: sampling probability
         """
         las = la * np.ones(shape=(1, 1), dtype=np.float64)
-        Model.__init__(self, states=[INFECTED], transmission_rates=las, removal_rates=[psi], ps=[p], *args, **kwargs)
+        Model.__init__(self, states=[INFECTIOUS], transmission_rates=las, removal_rates=[psi], ps=[p], *args, **kwargs)
 
     def get_name(self):
         return 'BD'
@@ -311,7 +367,7 @@ class BirthDeathWithSuperSpreadingModel(Model):
         las[1, 0] = la_sn
         las[1, 1] = la_ss
         psis = psi * np.ones(shape=2, dtype=np.float64)
-        Model.__init__(self, states=[INFECTED, SUPERSPREADER],
+        Model.__init__(self, states=[INFECTIOUS, SUPERSPREADER],
                        transmission_rates=las, removal_rates=psis, ps=[p, p], *args, **kwargs)
 
     @property
@@ -360,7 +416,7 @@ class BirthDeathExposedInfectiousWithSuperSpreadingModel(Model):
         psis = psi * np.ones(shape=3, dtype=np.float64)
         psis[0] = 0
 
-        Model.__init__(self, states=[EXPOSED, INFECTED, SUPERSPREADER],
+        Model.__init__(self, states=[EXPOSED, INFECTIOUS, SUPERSPREADER],
                        transition_rates=mus, transmission_rates=las, removal_rates=psis, ps=[0, p, p],
                        *args, **kwargs)
 
