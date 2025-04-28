@@ -99,6 +99,7 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
     # Track whether we need to update rates - initially true to set up rates for the first model
     model_changed = True
 
+    observed_nums = np.zeros((len(models) if use_skyline else 1, num_states), dtype=float)
     while infectious_nums.sum() and sampled_nums.sum() < target_sampled and time < max_time:
         # Only update model-dependent parameters if the model has changed
         if model_changed:
@@ -118,6 +119,8 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
             logging.debug(f'Among {total_infected} infected individuals ' +
                           ", ".join(f"{pi_i * 100:.2f}% are in state {s_i}"
                                     for (pi_i, s_i) in zip(infectious_nums / total_infected, current_model.states)))
+            # keep updating the frequencies as they should stabilize with time
+            observed_nums[current_model_index, :] = infectious_nums
 
         infectious_num_vector = np.concatenate([np.tile(infectious_nums.reshape((num_states, 1)), (2, num_states))
                                                .reshape(num_states_squared * 2), infectious_nums])
@@ -261,8 +264,8 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
 
     root = reconstruct_tree(id2parent_id, id2time, sampled_id2state, max_time, state_feature=state_feature)
     if ltt:
-        return root, reconstruct_ltt(id2parent_id, id2time), max_time
-    return root, max_time
+        return root, reconstruct_ltt(id2parent_id, id2time), max_time, observed_nums
+    return root, max_time, observed_nums
 
 
 def check_skyline_times(skyline_times, n_models):
@@ -379,11 +382,14 @@ def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, 
     total_trees = 0
     sampled_trees = 0
     res_ltt = None
+    total_observed_nums =np.zeros((len(models) if isinstance(models, list) else 1, \
+                                   len((models[0] if isinstance(models, list) else models).states)), dtype=float)
     while total_n_tips < min_tips:
         if ltt:
-            tree, cur_ltt, _ = simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time, ltt=True,
-                                                       state_feature=state_feature, state_frequencies=state_frequencies,
-                                                       max_notified_contacts=max_notified_contacts)
+            tree, cur_ltt, _, observed_nums = \
+                simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time, ltt=True,
+                                        state_feature=state_feature, state_frequencies=state_frequencies,
+                                        max_notified_contacts=max_notified_contacts)
             if res_ltt is None:
                 res_ltt = cur_ltt
             else:
@@ -398,19 +404,23 @@ def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, 
                         prev_res = res_ltt[time]
                     res_ltt[time] = total
         else:
-            tree, _ = simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time,
-                                              state_feature=state_feature, state_frequencies=state_frequencies,
-                                              max_notified_contacts=max_notified_contacts)
+            tree, _, observed_nums = \
+                simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time,
+                                        state_feature=state_feature, state_frequencies=state_frequencies,
+                                        max_notified_contacts=max_notified_contacts)
+        total_observed_nums += observed_nums
+
         total_trees += 1
         if tree:
             total_n_tips += len(tree)
             sampled_trees += 1
         if tree or keep_nones:
             forest.append(tree)
+
     if ltt:
-        return forest, res_ltt
+        return forest, res_ltt, observed_nums
     else:
-        return forest
+        return forest, observed_nums
 
 
 def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_frequencies=None, max_notified_contacts=1):
@@ -452,9 +462,10 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
 
     if T < np.inf:
         while True:
-            forest, ltt = generate_forest(models, skyline_times=skyline_times, max_time=T, min_tips=min_tips,
-                                          keep_nones=True, state_frequencies=state_frequencies, ltt=True,
-                                          max_notified_contacts=max_notified_contacts)
+            forest, ltt, observed_nums = \
+                generate_forest(models, skyline_times=skyline_times, max_time=T, min_tips=min_tips,
+                                keep_nones=True, state_frequencies=state_frequencies, ltt=True,
+                                max_notified_contacts=max_notified_contacts)
             total_trees = len(forest)
             forest = [tree for tree in forest if tree is not None]
             fl = len(forest)
@@ -463,17 +474,20 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
             if total_tips <= max_tips:
                 logging.info(f'Generated a forest of {fl} visible and {u} hidden trees '
                              f'with {total_tips} sampled tips over time T={T}.')
-                return forest, (total_tips, u, T), ltt
+                observed_frequencies = observed_nums / observed_nums.sum(axis=1).reshape((observed_nums.shape[0], 1))
+                return forest, (total_tips, u, T, observed_frequencies), ltt
             logging.debug(f'Generated a forest of {fl} visible and {u} hidden trees '
                           f'with {total_tips} sampled tips over time T={T}.')
     else:
         while True:
-            tree, ltt, max_time = simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=np.inf,
-                                                          max_sampled=max_tips, min_sampled=min_tips,
-                                                          state_frequencies=state_frequencies, ltt=True,
-                                                          max_notified_contacts=max_notified_contacts)
+            tree, ltt, max_time, observed_nums = \
+                simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=np.inf,
+                                        max_sampled=max_tips, min_sampled=min_tips,
+                                        state_frequencies=state_frequencies, ltt=True,
+                                        max_notified_contacts=max_notified_contacts)
             total_tips = len(tree) if tree else 0
             if total_tips >= min_tips:
                 logging.info('Generated a tree with {} sampled tips over time T={}.'.format(total_tips, max_time))
-                return [tree], (total_tips, 0, max_time), ltt
+                observed_frequencies = observed_nums / observed_nums.sum(axis=1).reshape((observed_nums.shape[0], 1))
+                return [tree], (total_tips, 0, max_time, observed_frequencies), ltt
             logging.debug('Generated a tree with {} sampled tips over time T={}.'.format(total_tips, max_time))

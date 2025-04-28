@@ -38,8 +38,7 @@ where 0 ≤ π<sub>i</sub> ≤ 1 and π<sub>1</sub> + ... + π<sub>m</sub> = 1.
 The MTBD model has the following epidemiological parameters:
 
 * R<sub>i</sub> = (Σ<sub>1≤j≤m</sub> λ<sub>ij</sub>)/ψ<sub>i</sub> -- reproduction number of state i
-* 1/ψ<sub>i</sub> -- infectious time of state i
-* R = Σ<sub>1≤i≤m</sub> π<sub>i</sub> R<sub>i</sub> -- average reproduction number
+* d<sub>i</sub> = 1/(Σ<sub>1≤j≤m;i≠j</sub>μ<sub>ij</sub> + ψ<sub>i</sub>) -- exit time from state i
 
 
 ## Contact Tracing (CT)
@@ -47,13 +46,22 @@ Contact tracing extension was introduced by Zhukova & Gascuel [[medRxiv 2024]](h
 It adds two parameters to the initial MTBD model:
 
 * υ -- probability to notify contacts upon sampling
-* φ -- notified contact removal and sampling rate: φ >> ψ<sub>i</sub> ∀i (1 ≤ i ≤ m). The pathogen of a notified contact is sampled automatically (with a probability of 1) upon removal. 
+* φ -- notified contact removal and sampling rate: φ >> ψ<sub>i</sub> ∀i (1 ≤ i ≤ m). The pathogen of a notified contact is sampled automatically (with a probability of 1) upon removal.
 
 and a meta-parameter κ, which defines how many most recent contacts can be notified by each index case. Each is notified independently, with the probability υ.
 
-CT adds the following epidemiological parameter:
+CT extension adds m notified contact states (1<sub>C</sub>, ..., m<sub>C</sub>) to its original MTBD model, 
+where i<sub>C</sub> is a notified version of the state i.
+Transition rates for a notified state i<sub>C</sub> are analogous to those of i (μ<sub>i<sub>C</sub>j<sub>C</sub></sub>=μ<sub>ij</sub>), 
+while transitions from non-notified states to notified ones and vice versa are not allowed (μ<sub>i<sub>C</sub>j</sub>=μ<sub>ji<sub>C</sub></sub>=0).
+Transmission rates for a notified state i<sub>C</sub> are the same as those of i (λ<sub>i<sub>C</sub>j</sub>=λ<sub>ij</sub>), 
+where the recipients are always in a non-notified state (λ<sub>i<sub>C</sub>j<sub>C</sub></sub>=λ<sub>ij<sub>C</sub></sub>=0).
+The removal rate for a notified state i<sub>C</sub> is φ.
 
-* 1/φ -- notified contact removal time
+
+For CT models exit times from notified contact states i<sub>C</sub> is calculated as:
+
+* d<sub>i<sub>C</sub></sub> = 1/(Σ<sub>1≤j≤m;i≠j</sub>μ<sub>i<sub>C</sub>j<sub>C</sub></sub> + φ)
 
 ## Skyline
 Skyline was introduced by Stadler _et al._ [[PNAS 2013]](https://doi.org/10.1073/pnas.1207965110) 
@@ -75,19 +83,30 @@ and to their -CT(κ) versions.
 
 
 ## BD
+1 state: 
+* I (infectious)
+
 3 parameters:
-* λ -- transmission rate
-* ψ -- removal rate
-* p -- sampling probability upon removal
+* λ = λ<sub>I</sub>  -- transmission rate
+* ψ = ψ<sub>I</sub> -- removal rate
+* p = p<sub>I</sub> -- sampling probability upon removal
+
+Epidemiological parameters:
+* R = R<sub>I</sub> = λ/ψ -- reproduction number
+* d<sub>I</sub> = 1/ψ -- infectious time 
 
 
 ## BD-CT(κ)
+2 states: 
+* I, infectious
+* I<sub>C</sub>, notified infectious contact
+
 5 parameters:
-* λ -- transmission rate
-* ψ -- removal rate
-* p -- sampling probability upon removal
+* λ = λ<sub>I</sub> = λ<sub>I<sub>C</sub></sub> -- transmission rate
+* ψ = ψ<sub>I</sub> -- removal rate of I
+* p = p<sub>I</sub> -- sampling probability upon removal of I
 * υ -- probability to notify contacts upon sampling
-* φ -- notified contact removal and sampling rate: φ >> ψ 
+* φ -- notified contact removal and sampling rate of I<sub>C</sub>: φ >> ψ 
 
 
 ## BDEI
@@ -96,61 +115,66 @@ and to their -CT(κ) versions.
 * I, infectious
 
 4 parameters:
-* μ -- transition rate from E to I (becoming infectious)
-* λ -- transmission rate from I to E
-* ψ -- removal rate of I
-* p -- sampling probability upon removal
+* μ = μ<sub>EI</sub> -- transition rate from E to I (becoming infectious)
+* λ = λ<sub>IE</sub> -- transmission rate from I to E
+* ψ = ψ<sub>I</sub> -- removal rate of I
+* p = p<sub>I</sub> -- sampling probability upon removal of I
 
 BDEI-specific epidemiological parameter:
-* 1/μ -- incubation period
+* d<sub>E</sub> = 1/μ -- incubation period
 
 
 ## BDEI-CT(κ)
-2 states: 
+4 states: 
 * E, exposed, i.e. infected but not yet infectious
 * I, infectious
+* E<sub>C</sub>, notified exposed contact
+* I<sub>C</sub>, notified infectious contact
 
 6 parameters:
-* μ -- transition rate from E to I (becoming infectious)
-* λ -- transmission rate from I to E
-* ψ -- removal rate of I
-* p -- sampling probability upon removal
+* μ = μ<sub>EI</sub> = μ<sub>E<sub>C</sub>I<sub>C</sub></sub>-- transition rate from an exposed state (notified or not) 
+to the corresponding infectious state (becoming infectious)
+* λ = λ<sub>IE</sub> = λ<sub>I<sub>C</sub>E</sub> -- transmission rate from an infectious state (notified or not) to E
+* ψ = ψ<sub>I</sub> -- removal rate of I
+* p = p<sub>I</sub> -- sampling probability upon removal
 * υ -- probability to notify contacts upon sampling
 * φ -- notified contact removal and sampling rate: φ >> ψ 
 
 ## BDSS
 2 states: 
-* N, standard infectious individual
+* I, standard infectious individual (a.k.a. normal spreader)
 * S, superspreader
 
 5(+1) parameters:
-* λ<sub>nn</sub> -- transmission rate from N to N
-* λ<sub>ns</sub> -- transmission rate from N to S
-* λ<sub>sn</sub> -- transmission rate from S to N
-* λ<sub>ss</sub> -- transmission rate from S to S
+* λ<sub>nn</sub> = λ<sub>II</sub> -- transmission rate from I to I
+* λ<sub>ns</sub> = λ<sub>IS</sub> -- transmission rate from I to S
+* λ<sub>sn</sub> = λ<sub>SI</sub> -- transmission rate from S to I
+* λ<sub>ss</sub> = λ<sub>SS</sub> -- transmission rate from S to S
 
     (with a constraint that λ<sub>ss</sub>/λ<sub>ns</sub>=λ<sub>sn</sub>/λ<sub>nn</sub>)
-* ψ -- removal rate of S and of N (the same)
-* p -- sampling probability upon removal (the same for N and S)
+* ψ = ψ<sub>I</sub> = ψ<sub>S</sub> -- removal rate
+* p = p<sub>I</sub> = p<sub>S</sub> -- sampling probability upon removal
 
 BDSS-specific epidemiological parameters:
-* X=λ<sub>ss</sub>/λ<sub>ns</sub>=λ<sub>sn</sub>/λ<sub>nn</sub> -- super-spreading transmission ratio
-* f=λ<sub>ss</sub>/(λ<sub>sn</sub> + λ<sub>ss</sub>) -- super-spreading fraction
+* X<sub>S</sub>=λ<sub>ss</sub>/λ<sub>ns</sub>=λ<sub>sn</sub>/λ<sub>nn</sub> -- super-spreading transmission ratio
+* f<sub>S</sub>=λ<sub>ss</sub>/(λ<sub>sn</sub> + λ<sub>ss</sub>) -- super-spreading fraction
 
 ## BDSS-CT(κ)
-2 states: 
-* N, standard infectious individual
+4 states: 
+* I, standard infectious individual (a.k.a. normal spreader)
 * S, superspreader
+* I<sub>C</sub>, notified normal spreader
+* S<sub>C</sub>, notified superspreader
 
 7(+1) parameters:
-* λ<sub>nn</sub> -- transmission rate from N to N
-* λ<sub>ns</sub> -- transmission rate from N to S
-* λ<sub>sn</sub> -- transmission rate from S to N
-* λ<sub>ss</sub> -- transmission rate from S to S
+* λ<sub>nn</sub> = λ<sub>II</sub> = λ<sub>I<sub>C</sub>I</sub> -- transmission rate from a normal spreader (notified or not) to I
+* λ<sub>ns</sub> = λ<sub>IS</sub> = λ<sub>I<sub>C</sub>S</sub> -- transmission rate from a normal spreader (notified or not) to S
+* λ<sub>sn</sub> = λ<sub>SI</sub> = λ<sub>S<sub>C</sub>I</sub> -- transmission rate from a superspreader (notified or not) to I
+* λ<sub>ss</sub> = λ<sub>SS</sub> = λ<sub>S<sub>C</sub>S</sub> -- transmission rate from a superspreader (notified or not) to S
 
     (with a constraint that λ<sub>ss</sub>/λ<sub>ns</sub>=λ<sub>sn</sub>/λ<sub>nn</sub>)
-* ψ -- removal rate of S and of N (the same)
-* p -- sampling probability upon removal (the same for N and S)
+* ψ = ψ<sub>I</sub> = ψ<sub>S</sub> -- removal rate of a non-notified state
+* p = p<sub>I</sub> = p<sub>S</sub> -- sampling probability upon removal of a non-notified state
 * υ -- probability to notify contacts upon sampling
 * φ -- notified contact removal and sampling rate: φ >> ψ 
 
@@ -158,36 +182,39 @@ BDSS-specific epidemiological parameters:
 ## BDEISS
 3 states: 
 * E, exposed, i.e. infected but not yet infectious
-* N, standard infectious individual
+* I, standard infectious individual (a.k.a. normal spreader)
 * S, infectious superspreader 
 
 6 parameters:
-* μ<sub>n</sub> -- transition rate from E to N (becoming infectious for normal spreaders)
-* μ<sub>s</sub> -- transition rate from E to S (becoming infectious for superspreaders)
-* λ<sub>n</sub> -- transmission rate from N to E
-* λ<sub>s</sub> -- transmission rate from S to E
-* ψ -- removal rate of S and of N (the same)
-* p -- sampling probability upon removal (the same for N and S)
+* μ<sub>n</sub> = μ<sub>EI</sub> -- transition rate from E to I (becoming infectious for normal spreaders)
+* μ<sub>s</sub> = μ<sub>ES</sub> -- transition rate from E to S (becoming infectious for superspreaders)
+* λ<sub>n</sub> = λ<sub>IE</sub> -- transmission rate from I to E
+* λ<sub>s</sub> = λ<sub>SE</sub> -- transmission rate from S to E
+* ψ = ψ<sub>I</sub> = ψ<sub>S</sub> -- removal rate of I and of S (the same)
+* p = p<sub>I</sub> = p<sub>S</sub> -- sampling probability upon removal (the same for I and S)
 
 BDEISS-specific epidemiological parameters:
-* X=λ<sub>s</sub>/λ<sub>n</sub> -- super-spreading transmission ratio
-* f=μ<sub>s</sub>/(μ<sub>n</sub> + μ<sub>s</sub>) -- super-spreading fraction (among infectious individuals)
-* 1/(μ<sub>n</sub> + μ<sub>s</sub>) -- incubation period
+* X<sub>S</sub> = λ<sub>s</sub>/λ<sub>n</sub> -- super-spreading transmission ratio
+* f<sub>S</sub> = μ<sub>s</sub>/(μ<sub>n</sub> + μ<sub>s</sub>) -- super-spreading fraction (among infectious individuals)
+* d<sub>E</sub> = 1/(μ<sub>n</sub> + μ<sub>s</sub>) -- incubation period
 
 
 ## BDEISS-CT(κ)
-3 states: 
+6 states: 
 * E, exposed, i.e. infected but not yet infectious
-* N, standard infectious individual
+* N, standard infectious individual (a.k.a. normal spreader)
 * S, superspreader
+* E<sub>C</sub>, notified exposed individual
+* I<sub>C</sub>, notified normal spreader
+* S<sub>C</sub>, notified superspreader
 
 8 parameters:
-* μ<sub>n</sub> -- transition rate from E to N (becoming infectious for normal spreaders)
-* μ<sub>s</sub> -- transition rate from E to S (becoming infectious for superspreaders)
-* λ<sub>n</sub> -- transmission rate from N to E
-* λ<sub>s</sub> -- transmission rate from S to E
-* ψ -- removal rate of S and of N (the same)
-* p -- sampling probability upon removal (the same for N and S)
+* μ<sub>n</sub> = μ<sub>EI</sub> = μ<sub>E<sub>C</sub>I<sub>C</sub></sub> -- transition rate from an exposed state (notified or not) to the corresponding normal infectious state (becoming infectious for normal spreaders)
+* μ<sub>s</sub> = μ<sub>ES</sub> = μ<sub>E<sub>C</sub>S<sub>C</sub></sub> -- transition rate from an exposed state (notified or not) to the corresponding superspreader infectious state (becoming infectious for superspreaders)
+* λ<sub>n</sub> = λ<sub>IE</sub> = λ<sub>I<sub>C</sub>E</sub> -- transmission rate from I or I<sub>C</sub> to E
+* λ<sub>s</sub> = λ<sub>SE</sub> = λ<sub>S<sub>C</sub>E</sub> -- transmission rate from S or S<sub>C</sub> to E
+* ψ = ψ<sub>I</sub> = ψ<sub>S</sub> -- removal rate of I and of S (the same)
+* p = p<sub>I</sub> = p<sub>S</sub> -- sampling probability upon removal of I or S
 * υ -- probability to notify contacts upon sampling
 * φ -- notified contact removal and sampling rate: φ >> ψ 
 
@@ -451,7 +478,7 @@ To simulate trees with 200-500 tips under the above models and settings:
 ```python3
 from treesimulator.generator import generate
 from treesimulator import save_forest
-from treesimulator.mtbd_models import Model, BirthDeathModel, BirthDeathExposedInfectiousModel, \
+from treesimulator.mtbd_models import Model, BirthDeathModel, BirthDeathExposedInfectiousModel,
   BirthDeathWithSuperSpreadingModel, BirthDeathExposedInfectiousWithSuperSpreadingModel, CTModel
 
 # 1. BD, BD-CT(1) and BD-CT(1)-Skyline
@@ -484,7 +511,8 @@ bdeict_model = CTModel(model=bdei_model, upsilon=0.2, phi=2.5)
 [bdeict_tree], _, _ = generate([bdeict_model], min_tips=200, max_tips=500, max_notified_contacts=2)
 save_forest([bdeict_tree], 'BDEICT_tree.nwk')
 ## BDEI-CT(2)-Skyline with three time intervals
-bdeict_model_1 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.2, mu=1, la=0.5, psi=0.25), upsilon=0.2, phi=2.5)
+bdeict_model_1 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.2, mu=1, la=0.5, psi=0.25), upsilon=0.2,
+                         phi=2.5)
 bdeict_model_2 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.3, mu=1, la=0.5, psi=0.3), upsilon=0.3, phi=2.5)
 bdeict_model_3 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.5, mu=1, la=0.5, psi=0.5), upsilon=0.3, phi=5)
 [bdeict_skyline_tree], _, _ = generate([bdeict_model_1, bdeict_model_2, bdeict_model_3], skyline_times=[2, 3],
@@ -502,15 +530,17 @@ bdssct_model = CTModel(model=bdss_model, upsilon=0.2, phi=2.5)
 [bdssct_tree], _, _ = generate([bdssct_model], min_tips=200, max_tips=500, max_notified_contacts=3)
 save_forest([bdssct_tree], 'BDSSCT_tree.nwk')
 ## BDSS-CT(3)-Skyline with two time intervals, using the model above for the first interval
-bdssct_model_2 = CTModel(model=BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.1, la_ns=0.3, la_sn=1, la_ss=3, psi=0.25),
-                         upsilon=0.5, phi=5)
+bdssct_model_2 = CTModel(
+  model=BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.1, la_ns=0.3, la_sn=1, la_ss=3, psi=0.25),
+  upsilon=0.5, phi=5)
 [bdssct_skyline_tree], _, _ = generate([bdssct_model, bdssct_model_2], skyline_times=[2], min_tips=200, max_tips=500,
                                        max_notified_contacts=3)
 save_forest([bdssct_skyline_tree], 'BDSSCTSkyline_tree.nwk')
 
 # BDEISS, BDEiSS-CT(1) and BDEISS-CT(1)-Skyline
 ## BDEISS model
-bdeiss_model = BirthDeathExposedInfectiousWithSuperSpreadingModel(p=0.5, mu_n=0.1, mu_s=0.3, la_n=0.5, la_s=1.5, psi=0.25)
+bdeiss_model = BirthDeathExposedInfectiousWithSuperSpreadingModel(p=0.5, mu_n=0.1, mu_s=0.3, la_n=0.5, la_s=1.5,
+                                                                  psi=0.25)
 print(bdeiss_model.get_epidemiological_parameters())
 [bdeiss_tree], _, _ = generate([bdeiss_model], min_tips=200, max_tips=500)
 save_forest([bdeiss_tree], 'BDEISS_tree.nwk')
@@ -519,9 +549,11 @@ bdeissct_model = CTModel(model=bdeiss_model, upsilon=0.2, phi=2.5)
 [bdeissct_tree], _, _ = generate([bdeissct_model], min_tips=200, max_tips=500, max_notified_contacts=1)
 save_forest([bdeissct_tree], 'BDEISSCT_tree.nwk')
 ## BDEISS-CT(1)-Skyline with two time intervals, using the model above for the first interval
-bdeissct_model_2 = CTModel(model=BirthDeathExposedInfectiousWithSuperSpreadingModel(p=0.2, mu_n=0.1, mu_s=0.3, la_n=0.5, la_s=1.5, psi=0.25),
-                           upsilon=0.5, phi=5)
-[bdeissct_skyline_tree], _, _ = generate([bdeissct_model, bdeissct_model_2], skyline_times=[2], min_tips=200, max_tips=500,
+bdeissct_model_2 = CTModel(
+  model=BirthDeathExposedInfectiousWithSuperSpreadingModel(p=0.2, mu_n=0.1, mu_s=0.3, la_n=0.5, la_s=1.5, psi=0.25),
+  upsilon=0.5, phi=5)
+[bdeissct_skyline_tree], _, _ = generate([bdeissct_model, bdeissct_model_2], skyline_times=[2], min_tips=200,
+                                         max_tips=500,
                                          max_notified_contacts=1)
 save_forest([bdeissct_skyline_tree], 'BDEISSCTSkyline_tree.nwk')
 

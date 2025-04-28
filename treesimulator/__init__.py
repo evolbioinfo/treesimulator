@@ -30,7 +30,7 @@ def save_ltt(real_ltt, observed_ltt, ltt_file):
             f.write('{}\t{}\t{}\n'.format(time, real, observed))
 
 
-def save_log(models, skyline_times, total_tips, T, u, log, kappa=0):
+def save_log(models, skyline_times, total_tips, T, u, log, kappa=0, observed_frequencies=None):
     os.makedirs(os.path.dirname(os.path.abspath(log)), exist_ok=True)
     if skyline_times is None:
         skyline_times = []
@@ -39,11 +39,15 @@ def save_log(models, skyline_times, total_tips, T, u, log, kappa=0):
     is_ct = isinstance(models[0], CTModel)
     with open(log, 'w+') as f:
         keys = models[0].get_epidemiological_parameters().keys()
-        f.write('{}{},tips,hidden_trees,end_time\n'.format(','.join(keys), ',kappa' if is_ct else ''))
-        for model, end_time in zip(models, skyline_times):
+        f.write('{}{},{},tips,hidden_trees,end_time\n'\
+                .format(','.join(keys),
+                        ',kappa' if is_ct else '',
+                        ','.join(f'pi_{s}_observed' for s in models[0].states)))
+        for model, end_time, obs in zip(models, skyline_times, observed_frequencies):
             tips = '' if end_time < T else total_tips
             params = model.get_epidemiological_parameters()
-            f.write('{}{},{},{},{:g}\n'.format(','.join(f'{params[k]:g}' for k in keys),
+            f.write('{}{},{},{},{},{:g}\n'.format(','.join(f'{params[k]:g}' for k in keys),
                                                f',{kappa:g}' if is_ct else '',
+                                               ','.join(f'{o:g}' for o in obs),
                                                tips, u, end_time))
             u = ''

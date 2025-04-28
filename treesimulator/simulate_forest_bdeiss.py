@@ -128,12 +128,13 @@ def main():
                             allow_irremovable_states=params.allow_irremovable_states)
         models.append(model)
 
-    forest, (total_tips, u, T), ltt = generate(models, skyline_times=params.skyline_times,
-                                               min_tips=params.min_tips, max_tips=params.max_tips, T=params.T,
-                                               max_notified_contacts=params.max_notified_contacts)
+    forest, (total_tips, u, T, observed_frequencies), ltt = \
+        generate(models, skyline_times=params.skyline_times, T=params.T,
+                 min_tips=params.min_tips, max_tips=params.max_tips, max_notified_contacts=params.max_notified_contacts)
 
     save_forest(forest, params.nwk)
-    save_log(models, params.skyline_times, total_tips, T, u, params.log, kappa=params.max_notified_contacts)
+    save_log(models, params.skyline_times, total_tips, T, u, params.log,
+             kappa=params.max_notified_contacts, observed_frequencies=observed_frequencies)
     if params.ltt:
         save_ltt(ltt, observed_ltt(forest, T), params.ltt)
 
