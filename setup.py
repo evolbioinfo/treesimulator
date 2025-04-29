@@ -13,14 +13,14 @@ setup(
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    version='0.2.11',
+    version='0.2.12',
     description='Simulation of rooted phylogenetic trees under a given Multi-Type Birth–Death model (with or without Contact Tracing) (with or without a Skyline).',
     author='Anna Zhukova',
     author_email='anna.zhukova@pasteur.fr',
     url='https://github.com/evolbioinfo/treesimulator',
     keywords=['phylogenetics', 'tree generator', 'multitype birth-death model', 'contact tracing', 'skyline',
               'MTBD', 'MTBD-CT', 'MTBD-Skyline', 'MTBD-CT-Skyline'],
-    install_requires=['six', 'ete3', 'numpy', 'scipy'],
+    install_requires=['six', 'ete3', 'numpy', 'scipy', 'sympy'],
     requires=['six', 'ete3', 'numpy', 'scipy', 'sympy'],
     entry_points={
             'console_scripts': [
