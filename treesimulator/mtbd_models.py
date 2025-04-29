@@ -132,12 +132,12 @@ class Model(object):
                 try:
                     self._state_frequencies_with_sympy()
                     self.check_frequencies()
-                except ValueError as e1:
+                except Exception as e1:
                     try:
                         self._state_frequencies_with_scipy()
                         self.check_frequencies()
-                    except ValueError as e2:
-                        logging.warning(f'Could not calculate the equillibrium frequencies due to {e1} and {e2}, '
+                    except Exception as e2:
+                        logging.warning(f'Could not calculate the equilibrium frequencies due to {e1} and {e2}, '
                                         'setting them to equal ones!')
                         m = len(self.states)
                         self.__pis = np.ones(m) / m
