@@ -537,5 +537,6 @@ class CTModel(Model):
         n_contact_states = len(self.model.states)
         for state_i, phi in zip(self.states[n_contact_states: ], self.removal_rates[n_contact_states:]):
             result[f'phi_{state_i}'] = phi
-            result[f'd_{state_i}'] = 1 / phi
+            if phi:
+                result[f'd_{state_i}'] = 1 / phi
         return result
