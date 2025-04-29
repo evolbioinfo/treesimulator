@@ -115,12 +115,12 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
             model_changed = False
 
         total_infected = infectious_nums.sum()
-        if num_states > 1:
-            logging.debug(f'Among {total_infected} infected individuals ' +
-                          ", ".join(f"{pi_i * 100:.2f}% are in state {s_i}"
-                                    for (pi_i, s_i) in zip(infectious_nums / total_infected, current_model.states)))
-            # keep updating the frequencies as they should stabilize with time
-            observed_nums[current_model_index, :] = infectious_nums
+        # if num_states > 1:
+        #     logging.debug(f'Among {total_infected} infected individuals ' +
+        #                   ", ".join(f"{pi_i * 100:.2f}% are in state {s_i}"
+        #                             for (pi_i, s_i) in zip(infectious_nums / total_infected, current_model.states)))
+        # keep updating the frequencies as they should stabilize with time
+        observed_nums[current_model_index, :] = infectious_nums
 
         infectious_num_vector = np.concatenate([np.tile(infectious_nums.reshape((num_states, 1)), (2, num_states))
                                                .reshape(num_states_squared * 2), infectious_nums])
@@ -382,8 +382,8 @@ def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, 
     total_trees = 0
     sampled_trees = 0
     res_ltt = None
-    total_observed_nums =np.zeros((len(models) if isinstance(models, list) else 1, \
-                                   len((models[0] if isinstance(models, list) else models).states)), dtype=float)
+    total_observed_nums = np.zeros((len(models) if isinstance(models, list) else 1, \
+                                    len((models[0] if isinstance(models, list) else models).states)), dtype=float)
     while total_n_tips < min_tips:
         if ltt:
             tree, cur_ltt, _, observed_nums = \
