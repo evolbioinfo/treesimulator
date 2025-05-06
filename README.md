@@ -22,6 +22,7 @@ An MTBD model with m states has
 
 m(m-1) state transition rate parameters:
 * μ<sub>ij</sub> -- transition rate from state i to state j (1 ≤ i, j ≤ m; i ≠ j), where μ<sub>ij</sub> ≥ 0
+  (In practice, we ask the user to provide an m x m matrix for MTBD transition rates. μ<sub>ii</sub> must be 0 for all i)
 
 m<sup>2</sup> transmission rate parameters:
 * λ<sub>ij</sub> -- transmission rate from state i (donor) to state j (recipient) (1 ≤ i, j ≤ m), where λ<sub>ij</sub> ≥ 0
@@ -409,7 +410,8 @@ generate_bdss --help
 
 #### User-defined MTBD, MTBD-CT(κ) and MTBD-CT(κ)-Skyline models
 The following command simulates a tree with 200-500 tips under a generic MTBD model, with two states A and B, 
-with μ<sub>aa</sub>=0.5, μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7, μ<sub>bb</sub>=0.8, 
+with μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7 
+(note that μ<sub>aa</sub>=μ<sub>bb</sub>=0 as only transitions between different states are possible!), 
 λ<sub>aa</sub>=0.1, λ<sub>ab</sub>=0.2, λ<sub>ba</sub>=0.3, λ<sub>bb</sub>=0.4, 
 ψ<sub>a</sub>=0.05, ψ<sub>b</sub>=0.08,
 p=<sub>a</sub>0.15, p=<sub>b</sub>0.65,
@@ -417,14 +419,14 @@ and saves it to the file tree.nwk, while saving the parameters to the comma-sepa
 ```bash
 generate_mtbd --min_tips 200 --max_tips 500 \
 --states A B \
---transition_rates 0.5 0.6 0.7 0.8 \
+--transition_rates 0 0.6 0.7 0 \
 --transmission_rates 0.1 0.2 0.3 0.4 \
 --removal_rates 0.05 0.08 \
 --sampling_probabilities 0.15 0.65 \
 --nwk tree.nwk --log params.csv
 ```
 The following command simulates a tree with 200-500 tips under a generic MTBD-CT(1) model, with two states A and B, 
-with μ<sub>aa</sub>=0.5, μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7, μ<sub>bb</sub>=0.8, 
+with μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7, 
 λ<sub>aa</sub>=0.1, λ<sub>ab</sub>=0.2, λ<sub>ba</sub>=0.3, λ<sub>bb</sub>=0.4, 
 ψ<sub>a</sub>=0.05, ψ<sub>b</sub>=0.08,
 p=<sub>a</sub>0.15, p=<sub>b</sub>0.65,
@@ -434,7 +436,7 @@ The simulated tree is saved to the file tree.nwk, while the model parameters are
 ```bash
 generate_mtbd --min_tips 200 --max_tips 500 \
 --states A B \
---transition_rates 0.5 0.6 0.7 0.8 \
+--transition_rates 0 0.6 0.7 0 \
 --transmission_rates 0.1 0.2 0.3 0.4 \
 --removal_rates 0.05 0.08 \
 --sampling_probabilities 0.15 0.65 \
@@ -443,12 +445,12 @@ generate_mtbd --min_tips 200 --max_tips 500 \
 ```
 The following command simulates a tree with 200-500 tips under a generic MTBD-CT(1)-Skyline model, 
 with two states A and B, 
-with μ<sub>aa</sub>=0.5, μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7, μ<sub>bb</sub>=0.8, 
+with μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7, 
 λ<sub>aa</sub>=0.1, λ<sub>ab</sub>=0.2, λ<sub>ba</sub>=0.3, λ<sub>bb</sub>=0.4, 
 ψ<sub>a</sub>=0.05, ψ<sub>b</sub>=0.08,
 p=<sub>a</sub>0.15, p=<sub>b</sub>0.65,
 φ=2.5, υ=0.2  between t=0 and t=8,
-and μ<sub>aa</sub>=1.5, μ<sub>ab</sub>=1.6, μ<sub>ba</sub>=1.7, μ<sub>bb</sub>=1.8, 
+and μ<sub>ab</sub>=1.6, μ<sub>ba</sub>=1.7, 
 λ<sub>aa</sub>=1.1, λ<sub>ab</sub>=1.2, λ<sub>ba</sub>=1.3, λ<sub>bb</sub>=1.4, 
 ψ<sub>a</sub>=1.05, ψ<sub>b</sub>=1.08,
 p=<sub>a</sub>0.1, p=<sub>b</sub>0.6,
@@ -458,7 +460,7 @@ The simulated tree is saved to the file tree.nwk, while the model parameters are
 ```bash
 generate_mtbd --min_tips 200 --max_tips 500 \
 --states A B \
---transition_rates 0.5 0.6 0.7 0.8 1.5 1.6 1.7 1.8\
+--transition_rates 0 0.6 0.7 0 0 1.6 1.7 0 \
 --transmission_rates 0.1 0.2 0.3 0.4 1.1 1.2 1.3 1.4 \
 --removal_rates 0.05 0.08 1.05 1.08 \
 --sampling_probabilities 0.15 0.65 0.1 0.6 \
@@ -537,7 +539,7 @@ bdssct_model_2 = CTModel(
                                        max_notified_contacts=3)
 save_forest([bdssct_skyline_tree], 'BDSSCTSkyline_tree.nwk')
 
-# BDEISS, BDEiSS-CT(1) and BDEISS-CT(1)-Skyline
+# BDEISS, BDEISS-CT(1) and BDEISS-CT(1)-Skyline
 ## BDEISS model
 bdeiss_model = BirthDeathExposedInfectiousWithSuperSpreadingModel(p=0.5, mu_n=0.1, mu_s=0.3, la_n=0.5, la_s=1.5,
                                                                   psi=0.25)
@@ -559,7 +561,7 @@ save_forest([bdeissct_skyline_tree], 'BDEISSCTSkyline_tree.nwk')
 
 # MTBD, MTBD-CT(1) and MTBD-CT(1)-Skyline
 ## MTBD model with two states: A and B
-mtbd_model = Model(states=['A', 'B'], transition_rates=[[0.5, 0.6], [0.7, 0.8]],
+mtbd_model = Model(states=['A', 'B'], transition_rates=[[0, 0.6], [0.7, 0]],
                    transmission_rates=[[0.1, 0.2], [0.3, 0.4]],
                    removal_rates=[0.05, 0.08], ps=[0.15, 0.65])
 [mtbd_tree], _, _ = generate([mtbd_model], min_tips=200, max_tips=500)
@@ -569,7 +571,7 @@ mtbdct_model = CTModel(model=mtbd_model, upsilon=0.2, phi=2.5)
 [mtbdct_tree], _, _ = generate([mtbdct_model], min_tips=200, max_tips=500, max_notified_contacts=1)
 save_forest([mtbdct_tree], 'MTBDCT_tree.nwk')
 ## MTBD-CT(1)-Skyline with two time intervals, using the model above for the first interval
-mtbdct_model_2 = CTModel(model=Model(states=['A', 'B'], transition_rates=[[1.5, 1.6], [1.7, 1.8]],
+mtbdct_model_2 = CTModel(model=Model(states=['A', 'B'], transition_rates=[[0, 1.6], [1.7, 0]],
                                      transmission_rates=[[1.1, 1.2], [1.3, 1.4]],
                                      removal_rates=[1.05, 1.08], ps=[0.1, 0.6]),
                          upsilon=0.4, phi=3.5)

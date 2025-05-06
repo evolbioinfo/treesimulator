@@ -56,6 +56,7 @@ def main():
                         help="transition rate matrix, row after row, in the same order as model states, "
                              "e.g. if a model has 2 states given as --states E I,"
                              "then here we expect E->E E->I I->E I->I."
+                             "All the transition rate from the state to itself  (e.g., E->E and I->I) must be zero."
                              "If the Skyline is used, transition rate matrix for the model at the tree root "
                              "is followed by the transition rate matrix of the next model, etc. "
                              "For instance, for two models (m1 and m2) with the states E and I, we expect:"
