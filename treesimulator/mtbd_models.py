@@ -1,10 +1,8 @@
 import logging
 
 import numpy as np
-from scipy.optimize import fsolve
-
+from scipy.optimize import least_squares
 import sympy
-
 
 EXPOSED = 'E'
 INFECTIOUS = 'I'
@@ -85,23 +83,21 @@ class Model(object):
         # dN_k = -N_k sum_j mu_kj dt + sum_j N_j mu_jk dt + sum_j N_j la_jk dt - N_k psi_k dt =
         #   = [-pi_k (sum_j mu_kj + psi_k) + sum_j pi_j (mu_jk + la_jk)] N dt
 
+        dN_div_N_dt = PI_I.dot(LA_I_ - PSI_I)
+
         for k in range(m - 1):
             pi_k = PI_I[k]
-
-            dN_div_N_dt = PI_I.dot(LA_I_ - PSI_I)
             dN_k_div_N_dt = -pi_k * (MU_IJ[k, :].sum() + PSI_I[k]) + PI_I.dot(MU_IJ[:, k] + LA_IJ[:, k])
             eqs.append(sympy.Eq(pi_k * dN_div_N_dt - dN_k_div_N_dt, 0))
-
-
 
         solution = sympy.solve(eqs)
         if isinstance(solution, list):
             solution = next((s for s in solution if all((_ >= 0) and (_ <= 1) for _ in s.values())), None)
             if solution is None:
                 raise ValueError('Sympy could not find a solution')
-        self.__pis = np.array([float(solution[PI_I[k]]) for k in range(m)])
+        self.state_frequencies = np.array([float(solution[PI_I[k]]) for k in range(m)])
 
-    def _state_frequencies_with_scipy(self):
+    def _state_frequencies_with_least_squares(self):
         MU_IJ, LA_IJ, PSI_I = self.transition_rates, self.transmission_rates, self.removal_rates
         LA_I_ = LA_IJ.sum(axis=1)
         m = len(self.states)
@@ -114,14 +110,15 @@ class Model(object):
             #   where la_i_ = sum_j la_ij;
             # dN_k = -N_k sum_j mu_kj dt + sum_j N_j mu_jk dt + sum_j N_j la_jk dt - N_k psi_k dt =
             #   = [-pi_k (sum_j mu_kj + psi_k) + sum_j pi_j (mu_jk + la_jk)] N dt
+            dN_div_N_dt = PI_I.dot(LA_I_ - PSI_I)
+
             for k in range(m - 1):
                 pi_k = PI_I[k]
-                dN_div_N_dt = PI_I.dot(LA_I_ - PSI_I)
                 dN_k_div_N_dt = -pi_k * (MU_IJ[k, :].sum() + PSI_I[k]) + PI_I.dot(MU_IJ[:, k] + LA_IJ[:, k])
                 res.append(pi_k * dN_div_N_dt - dN_k_div_N_dt)
             return res
 
-        self.__pis = np.round(fsolve(func, np.ones(m) / m), 6)
+        self.state_frequencies = least_squares(func, x0=np.ones(m) / m, bounds=[0, 1]).x
 
     @property
     def state_frequencies(self):
@@ -131,11 +128,9 @@ class Model(object):
             else:
                 try:
                     self._state_frequencies_with_sympy()
-                    self.check_frequencies()
                 except Exception as e1:
                     try:
-                        self._state_frequencies_with_scipy()
-                        self.check_frequencies()
+                        self._state_frequencies_with_least_squares()
                     except Exception as e2:
                         logging.warning(f'Could not calculate the equilibrium frequencies due to {e1} and {e2}, '
                                         'setting them to equal ones!')
@@ -144,12 +139,16 @@ class Model(object):
         return self.__pis
 
     def check_frequencies(self):
-        if np.any(self.__pis < 0):
+        if np.any(np.round(self.__pis, 6) < 0):
             raise ValueError('Equilibrium frequencies cannot be negative')
-        if np.any(self.__pis > 1):
+        if np.any(np.round(self.__pis, 6) > 1):
             raise ValueError('Equilibrium frequencies cannot be greater than one')
         if np.round(self.__pis.sum(), 2) != 1:
             raise ValueError('Equilibrium frequencies must sum up to one')
+        # Ensure they sum up to one perfectly
+        self.__pis = np.maximum(self.__pis, 0)
+        self.__pis /= self.__pis.sum()
+
 
     @state_frequencies.setter
     def state_frequencies(self, pis):
@@ -457,45 +456,27 @@ class CTModel(Model):
 
         n_removal_rates = model.removal_rates.shape[0]
         removal_rates = np.pad(model.removal_rates, (0, n_removal_rates), mode='constant', constant_values=phi)
+        rhos = np.pad(model.ps, (0, model.ps.shape[0]), mode='constant', constant_values=1)
         if allow_irremovable_states:
             # If there was no way to remove a certain state (e.g. E in BDEI),
             # then notification should not change its "irremovable" status
             mask = np.zeros(2 * n_removal_rates, dtype=bool)
             mask[n_removal_rates:] = (model.removal_rates == 0)
             removal_rates[mask] = 0
+            rhos[mask] = 0
         self.__irremovable_states = allow_irremovable_states
 
+        pis = None
+        try:
+            pis = self._ct_state_frequencies(transition_rates, transmission_rates, removal_rates, rhos, upsilon)
+        except Exception as e:
+            logging.warning(f'Could not calculate the CT equilibrium frequencies due to {e}')
 
-        pis_n = model.state_frequencies
-        la_avg = pis_n.dot(model.transmission_rates.sum(axis=1))
-        psi_avg = pis_n.dot(model.removal_rates)
-        phi_avg = pis_n.dot(removal_rates[n_removal_rates:])
-        psi_rho = pis_n.dot(model.removal_rates * model.ps)
-
-        a = phi_avg - psi_avg + psi_rho * upsilon / 2 - phi_avg * upsilon * phi_avg / (psi_avg + phi_avg)
-        b = -la_avg + psi_avg - phi_avg - psi_rho * upsilon + phi_avg * upsilon * phi_avg / (psi_avg + phi_avg)
-        c = psi_avg * psi_rho * upsilon / 2
-
-        root = np.sqrt(np.power(b, 2) - 4 * a * c)
-        x = (-b + root) / 2 / a
-        if 0 <= x <= 1:
-            pi_c = x
-        else:
-            pi_c = (-b - root) / 2 / a
-
-        if 0 <= pi_c <= 1:
-            pis = np.concatenate((pis_n * (1 - pi_c), pis_n * pi_c))
-        else:
-            pis = np.pad(pis_n, (0, model.state_frequencies.shape[0]), mode='constant',
-                         constant_values=0)
-
-
-    
         Model.__init__(self, states=[_ for _ in model.states] + [f'{_}-{CONTACT}' for _ in model.states],
                        transition_rates=transition_rates,
                        transmission_rates=transmission_rates,
                        removal_rates=removal_rates,
-                       ps=np.pad(model.ps, (0, model.ps.shape[0]), mode='constant', constant_values=1),
+                       ps=rhos,
                        n_recipients=np.concatenate([model.n_recipients, model.n_recipients]),
                        state_frequencies=pis,
                        *args, **kwargs)
@@ -504,6 +485,54 @@ class CTModel(Model):
         self.check_upsilon()
         self.model = model
 
+    def _ct_state_frequencies(self, MU_IJ, LA_IJ, PSI_I, RHO_I, upsilon):
+        LA_I_ = LA_IJ.sum(axis=1)
+        # LA__J = LA_IJ.sum(axis=0)
+        # LA__J_plus_LA_I_ = (LA__J + LA_I_)
+        MU_I_ = MU_IJ.sum(axis=1)
+        EXIT_I = MU_I_ + PSI_I
+        PSI_RHO_UPS_I = PSI_I * RHO_I * upsilon
+        m = len(PSI_I)
+        half_m = int(m / 2)  # non-notified
+
+        notification = []
+        for k in range(half_m):
+            prob_psi_j_before_k = PSI_I / (EXIT_I + EXIT_I[k])
+            prob_psi_j_before_k[(EXIT_I + EXIT_I[k]) == 0] = 0
+
+            # prob_la_bw_j_and_k = (LA_IJ[k, :] + LA_IJ[:, k]) / LA__J_plus_LA_I_
+            # prob_la_bw_j_and_k[LA__J_plus_LA_I_ == 0] = 0
+
+            # pi_k_c = PI_I[k + half_m]
+            # frac_unnotified_over_k = pi_k / (pi_k + pi_k_c)
+
+            # notification[k] = prob_la_bw_j_and_k * PSI_I * RHO_I * upsilon * frac_unnotified_over_k * prob_psi_j_before_k
+            notification.append(PSI_RHO_UPS_I * prob_psi_j_before_k) # * pi_k
+
+        def func(PI_I):
+            res = [PI_I.sum() - 1]
+            dN_div_N_dt = PI_I.dot(LA_I_ - PSI_I)
+
+            for k in range(half_m):
+                pi_k = PI_I[k]
+
+                dN_k_div_N_dt = (-pi_k * (MU_IJ[k, :].sum() + PSI_I[k])
+                                 + PI_I.dot(MU_IJ[:, k] + LA_IJ[:, k]
+                                            - notification[k] * pi_k))
+                res.append(pi_k * dN_div_N_dt - dN_k_div_N_dt)
+            for k_c in range(half_m, m - 1):
+                pi_k_c = PI_I[k_c]
+                k = k_c - half_m
+                pi_k = PI_I[k]
+
+                dN_k_c_div_N_dt = (-pi_k_c * (MU_IJ[k_c, :].sum() + PSI_I[k_c])
+                                 + PI_I.dot(MU_IJ[:, k_c] + LA_IJ[:, k_c]
+                                            + notification[k] * pi_k))
+                res.append(pi_k_c * dN_div_N_dt - dN_k_c_div_N_dt)
+            return res
+
+        res = least_squares(func, x0=np.ones(m) / m, bounds=[0, 1])
+        return res.x
 
 
     def clone(self):

@@ -49,7 +49,7 @@ def save_log(models, skyline_times, total_tips, T, u, log, kappa=0, observed_fre
         for model, end_time, obs in zip(models, skyline_times, observed_frequencies):
             tips = '' if end_time < T else total_tips
             params = model.get_epidemiological_parameters()
-            f.write('{}{},{},{},{:g}\n'.format(','.join(f'{params[k]:g}' for k in keys),
+            f.write('{}{},{},{},{},{:g}\n'.format(','.join(f'{params[k]:g}' for k in keys),
                                                f',{kappa:g}' if is_ct else '',
                                                ','.join(f'{pi:g},{o:g}' for (pi, o) in zip((params[_] for _ in pis), obs)),
                                                tips, u, end_time))
