@@ -16,7 +16,7 @@ def get_normalised_generator(frequencies, rate_matrix=None):
     """
     if rate_matrix is None:
         n = len(frequencies)
-        rate_matrix = np.ones(shape=(n, n), dtype=np.float64) - np.eye(n)
+        rate_matrix = np.ones(shape=(n, n), dtype=float) - np.eye(n)
     generator = rate_matrix * frequencies
     generator -= np.diag(generator.sum(axis=1))
     mu = -generator.diagonal().dot(frequencies)
@@ -76,7 +76,7 @@ def simulate_sequence(nucleotide_array, rate_matrix, max_time):
 
 
 if __name__ == "__main__":
-    rate_matrix = np.ones(shape=(4, 4), dtype=np.float64) - np.eye(4)
+    rate_matrix = np.ones(shape=(4, 4), dtype=float) - np.eye(4)
     rate_matrix *= np.array([0.7, 0.1, 0.1, 0.1])
 
     # rate_matrix = get_normalised_generator(np.array([0.3, 0.2, 0.2, 0.3]))

@@ -34,13 +34,13 @@ class Model(object):
         self.__n_recipients = np.array(n_recipients) if n_recipients is not None else np.ones(num_states, dtype=float)
         self.check_n_recipients()
         self.__transmission_rates = np.array(transmission_rates) if transmission_rates is not None \
-            else np.zeros(shape=(num_states, num_states), dtype=np.float64)
+            else np.zeros(shape=(num_states, num_states), dtype=float)
         self.check_transmission_rates()
         self.__transition_rates = np.array(transition_rates) if transition_rates is not None \
-            else np.zeros(shape=(num_states, num_states), dtype=np.float64)
+            else np.zeros(shape=(num_states, num_states), dtype=float)
         self.check_transition_rates()
         self.__removal_rates = np.array(removal_rates) if removal_rates is not None \
-            else np.zeros(shape=num_states, dtype=np.float64)
+            else np.zeros(shape=num_states, dtype=float)
         self.check_removal_rates()
         if state_frequencies is not None:
             self.__pis = np.array(state_frequencies)
@@ -283,11 +283,11 @@ class BirthDeathExposedInfectiousModel(Model):
         :param psi: removal of I
         :param p: sampling probability of I
         """
-        mus = np.zeros(shape=(2, 2), dtype=np.float64)
+        mus = np.zeros(shape=(2, 2), dtype=float)
         mus[0, 1] = mu
-        las = np.zeros(shape=(2, 2), dtype=np.float64)
+        las = np.zeros(shape=(2, 2), dtype=float)
         las[1, 0] = la
-        psis = np.zeros(shape=2, dtype=np.float64)
+        psis = np.zeros(shape=2, dtype=float)
         psis[1] = psi
 
         Model.__init__(self, states=[EXPOSED, INFECTIOUS],
@@ -326,7 +326,7 @@ class BirthDeathModel(Model):
         :param psi: removal
         :param p: sampling probability
         """
-        las = la * np.ones(shape=(1, 1), dtype=np.float64)
+        las = la * np.ones(shape=(1, 1), dtype=float)
         Model.__init__(self, states=[INFECTIOUS], transmission_rates=las, removal_rates=[psi], ps=[p], *args, **kwargs)
 
     def get_name(self):
@@ -344,7 +344,7 @@ class BirthDeathWithSuperSpreadingModel(Model):
         :param psi: removal
         :param p: sampling
         """
-        las = np.zeros(shape=(2, 2), dtype=np.float64)
+        las = np.zeros(shape=(2, 2), dtype=float)
         s_ratio = la_ss / la_ns
         n_ratio = la_sn / la_nn
         if np.abs(s_ratio - n_ratio) > 1e-3:
@@ -355,7 +355,7 @@ class BirthDeathWithSuperSpreadingModel(Model):
         las[0, 1] = la_ns
         las[1, 0] = la_sn
         las[1, 1] = la_ss
-        psis = psi * np.ones(shape=2, dtype=np.float64)
+        psis = psi * np.ones(shape=2, dtype=float)
         Model.__init__(self, states=[INFECTIOUS, SUPERSPREADER],
                        transmission_rates=las, removal_rates=psis, ps=[p, p], *args, **kwargs)
 
@@ -393,15 +393,15 @@ class BirthDeathExposedInfectiousWithSuperSpreadingModel(Model):
         :param psi: removal
         :param p: sampling
         """
-        mus = np.zeros(shape=(3, 3), dtype=np.float64)
+        mus = np.zeros(shape=(3, 3), dtype=float)
         mus[0, 1] = mu_n
         mus[0, 2] = mu_s
 
-        las = np.zeros(shape=(3, 3), dtype=np.float64)
+        las = np.zeros(shape=(3, 3), dtype=float)
         las[1, 0] = la_n
         las[2, 0] = la_s
 
-        psis = psi * np.ones(shape=3, dtype=np.float64)
+        psis = psi * np.ones(shape=3, dtype=float)
         psis[0] = 0
 
         Model.__init__(self, states=[EXPOSED, INFECTIOUS, SUPERSPREADER],

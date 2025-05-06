@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from treesimulator import save_forest, save_log, save_ltt
 from treesimulator.generator import generate, observed_ltt
-from treesimulator.mtbd_models import BirthDeathExposedInfectiousModel, CTModel
+from treesimulator.mtbd_models import BirthDeathExposedInfectiousModel, CTModel, EXPOSED, INFECTIOUS
 
 
 def main():
@@ -60,16 +60,21 @@ def main():
                         help='Maximum notified contacts')
     parser.add_argument('--allow_irremovable_states', action='store_true', default=False,
                         help='If specified and the initial model included "irremovable" states '
-                             '(i.e., whose removal rate was zero, e.g., E in the BDEI model), '
+                             '(i.e., whose removal rate was zero, e.g., E), '
                              'then even after notification their removal rate will stay zero, '
                              'and the corresponding individuals will become "removable" (at a rate phi) '
                              'only once they change the state to a "removable" one '
-                             '(e.g., from E-notified to I-notified in BDEI-CT).')
+                             '(e.g., from E-C to I-C).')
 
     parser.add_argument('--avg_recipients', required=False, default=1, type=float,
                         help='average number of recipients per transmission. '
                              'By default one (one-to-one transmission), '
                              'but if a larger number is given then one-to-many transmissions become possible.')
+
+    parser.add_argument('--root_state', type=str, choices=(EXPOSED, INFECTIOUS), default=None,
+                        help='state at the beginning of the root branch(es). '
+                             'By default, one of the model states will be chosen randomly (and independently for each tree) '
+                             'based on the state equilibrium frequencies.')
 
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
@@ -120,7 +125,8 @@ def main():
 
     forest, (total_tips, u, T, observed_frequencies), ltt = \
         generate(models, skyline_times=params.skyline_times, T=params.T,
-                 min_tips=params.min_tips, max_tips=params.max_tips, max_notified_contacts=params.max_notified_contacts)
+                 min_tips=params.min_tips, max_tips=params.max_tips, max_notified_contacts=params.max_notified_contacts,
+                 root_state=params.root_state)
 
     save_forest(forest, params.nwk)
     save_log(models, params.skyline_times, total_tips, T, u, params.log,

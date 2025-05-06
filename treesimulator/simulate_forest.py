@@ -45,13 +45,12 @@ def main():
     # States parameter
     parser.add_argument('--states', required=True, nargs='+', type=str, help="model states")
 
-    # Modified parameter approach for skyline models
-    parser.add_argument('--t', nargs='+', type=float,
-                        help="time points for skyline models, specifying when to switch from model i to model i+1. "
-                             "The number of models will be determined as len(t) + 1 since model[0] always starts at time 0.")
+    parser.add_argument('--skyline_times', nargs='+', type=float,
+                        help="List of time points specifying when to switch from model i to model i+1 in the Skyline."
+                             "Must be sorted in ascending order and contain one less elements "
+                             "than the number of models in the Skyline."
+                             "The first model always starts at time 0.")
 
-    # New approach: Specify matrices for each time point using a flattened format
-    # Format: transition_matrices[timepoint_idx][row][col]
     parser.add_argument('--transition_rates', nargs='+', type=float,
                         help="transition rate matrix, row after row, in the same order as model states, "
                              "e.g. if a model has 2 states given as --states E I,"
@@ -106,13 +105,18 @@ def main():
                              'then even after notification their removal rate will stay zero, '
                              'and the corresponding individuals will become "removable" (at a rate phi) '
                              'only once they change the state to a "removable" one '
-                             '(e.g., from E-notified to I-notified in BDEI-CT).')
+                             '(e.g., from E-C to I-C in BDEI-CT).')
 
     parser.add_argument('--avg_recipients', nargs='*', type=float,
                         help='average number of recipients per transmission '
                              'for each donor state (in the same order as the model states). '
                              'By default, only one-to-one transmissions are allowed, '
                              'but if larger numbers are given then one-to-many transmissions become possible.')
+
+    parser.add_argument('--root_state', type=str, default=None,
+                        help='state at the beginning of the root branch(es). '
+                             'By default, one of the model states will be chosen randomly (and independently for each tree) '
+                             'based on the state equilibrium frequencies.')
 
     parser.add_argument('--log', required=True, type=str, help="output log file")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
@@ -192,7 +196,8 @@ def main():
 
     forest, (total_tips, u, T, observed_frequencies), ltt = \
         generate(models, skyline_times=params.skyline_times, T=params.T,
-                 min_tips=params.min_tips, max_tips=params.max_tips, max_notified_contacts=params.max_notified_contacts)
+                 min_tips=params.min_tips, max_tips=params.max_tips, max_notified_contacts=params.max_notified_contacts,
+                 root_state=params.root_state)
 
     save_forest(forest, params.nwk)
     save_log(models, params.skyline_times, total_tips, T, u, params.log, kappa=params.max_notified_contacts,

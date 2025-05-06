@@ -42,6 +42,9 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
     :type ltt: bool
     :param max_notified_contacts: maximum notified contacts for -CT models (by default 1, meaning the most recent contact)
     :type max_notified_contacts: int
+    :param root_state: State of the root node (at the beginning of the root branch).
+        If not specified, the state will be drawn randomly according to equilibrium frequencies.
+    :type root_state: str
     :return: the simulated tree and the time it covers
     :rtype: ete3.Tree
     """
@@ -61,8 +64,15 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
         state_frequencies = current_model.state_frequencies
     state_indices = np.arange(num_states)
     root_states = state_indices[current_model.states == root_state]
-    root_state = np.random.choice(state_indices, size=1, p=state_frequencies)[0] \
-        if len(root_states) == 0 else root_states[0]
+    if len(root_states) > 0:
+        root_state = root_states[0]
+    else:
+        # If it is a CT model, pick the root state among non-notified ones
+        if isinstance(current_model, CTModel):
+            root_state = np.random.choice(state_indices[: int(len(state_indices) / 2)],
+                                          size=1, p=current_model.model.state_frequencies)[0]
+        else:
+            root_state = np.random.choice(state_indices, size=1, p=state_frequencies)[0]
 
     time = 0
     infectious_nums = np.zeros(num_states, dtype=np.int64)
@@ -376,7 +386,8 @@ def random_pop(elements):
 
 
 def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, keep_nones=False, state_feature=STATE,
-                    state_frequencies=None, ltt=False, max_notified_contacts=1):
+                    state_frequencies=None, ltt=False, max_notified_contacts=1,
+                    root_state=None):
     total_n_tips = 0
     forest = []
     total_trees = 0
@@ -389,7 +400,7 @@ def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, 
             tree, cur_ltt, _, observed_nums = \
                 simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time, ltt=True,
                                         state_feature=state_feature, state_frequencies=state_frequencies,
-                                        max_notified_contacts=max_notified_contacts)
+                                        max_notified_contacts=max_notified_contacts, root_state=root_state)
             if res_ltt is None:
                 res_ltt = cur_ltt
             else:
@@ -405,9 +416,9 @@ def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, 
                     res_ltt[time] = total
         else:
             tree, _, observed_nums = \
-                simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time,
+                simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=max_time, ltt=False,
                                         state_feature=state_feature, state_frequencies=state_frequencies,
-                                        max_notified_contacts=max_notified_contacts)
+                                        max_notified_contacts=max_notified_contacts, root_state=root_state)
         total_observed_nums += observed_nums
 
         total_trees += 1
@@ -418,12 +429,13 @@ def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, 
             forest.append(tree)
 
     if ltt:
-        return forest, res_ltt, observed_nums
+        return forest, res_ltt, total_observed_nums
     else:
-        return forest, observed_nums
+        return forest, total_observed_nums
 
 
-def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_frequencies=None, max_notified_contacts=1):
+def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_frequencies=None, max_notified_contacts=1,
+             root_state=None):
     """
     Simulates a tree (or a forest of trees, if --T is specified) for given MTBD model parameters.
 
@@ -451,6 +463,9 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
     :type state_frequencies: list(float)
     :param max_notified_contacts: maximum notified contacts for -CT models (by default 1, meaning the most recent contact)
     :type max_notified_contacts: int
+    :param root_state: State of the root node (at the beginning of the root branch).
+        If not specified, the state will be drawn randomly according to equilibrium frequencies.
+    :type root_state: str
     :return: the simulated forest (containing only one tree in case of a tree simulation),
         stats on total number of tips, on the number of hidden trees (0  case of a tree simulation), and on total time T,
         and the LTT numbers as a mapping between times and numbers of infected individuals
@@ -465,7 +480,7 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
             forest, ltt, observed_nums = \
                 generate_forest(models, skyline_times=skyline_times, max_time=T, min_tips=min_tips,
                                 keep_nones=True, state_frequencies=state_frequencies, ltt=True,
-                                max_notified_contacts=max_notified_contacts)
+                                max_notified_contacts=max_notified_contacts, root_state=root_state)
             total_trees = len(forest)
             forest = [tree for tree in forest if tree is not None]
             fl = len(forest)
@@ -484,7 +499,7 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
                 simulate_tree_gillespie(models, skyline_times=skyline_times, max_time=np.inf,
                                         max_sampled=max_tips, min_sampled=min_tips,
                                         state_frequencies=state_frequencies, ltt=True,
-                                        max_notified_contacts=max_notified_contacts)
+                                        max_notified_contacts=max_notified_contacts, root_state=root_state)
             total_tips = len(tree) if tree else 0
             if total_tips >= min_tips:
                 logging.info('Generated a tree with {} sampled tips over time T={}.'.format(total_tips, max_time))

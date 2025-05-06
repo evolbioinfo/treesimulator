@@ -57,12 +57,9 @@ def main():
     parser.add_argument('--max_notified_contacts', required=False, default=1, type=int,
                         help='Maximum notified contacts')
     parser.add_argument('--allow_irremovable_states', action='store_true', default=False,
-                        help='If specified and the initial model included "irremovable" states '
-                             '(i.e., whose removal rate was zero, e.g., E in the BDEI model), '
-                             'then even after notification their removal rate will stay zero, '
-                             'and the corresponding individuals will become "removable" (at a rate phi) '
-                             'only once they change the state to a "removable" one '
-                             '(e.g., from E-notified to I-notified in BDEI-CT).')
+                        help='If specified and the initial model had a zero removal rate (psi=0), '
+                             'then even after notification the removal rate will stay zero (phi=0) '
+                             'and the given value of phi ignored.')
 
     parser.add_argument('--avg_recipients', required=False, default=1, type=float,
                         help='average number of recipients per transmission. '
