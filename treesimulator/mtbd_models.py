@@ -144,7 +144,7 @@ class Model(object):
         if np.any(np.round(self.__pis, 6) > 1):
             raise ValueError('Equilibrium frequencies cannot be greater than one')
         if np.round(self.__pis.sum(), 2) != 1:
-            raise ValueError('Equilibrium frequencies must sum up to one')
+            raise ValueError(f'Equilibrium frequencies must sum up to one but they sum up to {self.__pis.sum():g} instead')
         # Ensure they sum up to one perfectly
         self.__pis = np.maximum(self.__pis, 0)
         self.__pis /= self.__pis.sum()
@@ -469,6 +469,7 @@ class CTModel(Model):
         pis = None
         try:
             pis = self._ct_state_frequencies(transition_rates, transmission_rates, removal_rates, rhos, upsilon)
+            pis /= pis.sum()
         except Exception as e:
             logging.warning(f'Could not calculate the CT equilibrium frequencies due to {e}')
 
@@ -487,8 +488,8 @@ class CTModel(Model):
 
     def _ct_state_frequencies(self, MU_IJ, LA_IJ, PSI_I, RHO_I, upsilon):
         LA_I_ = LA_IJ.sum(axis=1)
-        # LA__J = LA_IJ.sum(axis=0)
-        # LA__J_plus_LA_I_ = (LA__J + LA_I_)
+        LA__J = LA_IJ.sum(axis=0)
+        LA__J_plus_LA_I_ = (LA__J + LA_I_)
         MU_I_ = MU_IJ.sum(axis=1)
         EXIT_I = MU_I_ + PSI_I
         PSI_RHO_UPS_I = PSI_I * RHO_I * upsilon
@@ -500,14 +501,12 @@ class CTModel(Model):
             prob_psi_j_before_k = PSI_I / (EXIT_I + EXIT_I[k])
             prob_psi_j_before_k[(EXIT_I + EXIT_I[k]) == 0] = 0
 
-            # prob_la_bw_j_and_k = (LA_IJ[k, :] + LA_IJ[:, k]) / LA__J_plus_LA_I_
-            # prob_la_bw_j_and_k[LA__J_plus_LA_I_ == 0] = 0
+            prob_la_bw_j_and_k = (LA_IJ[k, :] + LA_IJ[:, k]) / LA__J_plus_LA_I_
+            prob_la_bw_j_and_k[LA__J_plus_LA_I_ == 0] = 0
 
-            # pi_k_c = PI_I[k + half_m]
-            # frac_unnotified_over_k = pi_k / (pi_k + pi_k_c)
 
-            # notification[k] = prob_la_bw_j_and_k * PSI_I * RHO_I * upsilon * frac_unnotified_over_k * prob_psi_j_before_k
-            notification.append(PSI_RHO_UPS_I * prob_psi_j_before_k) # * pi_k
+            notification.append(prob_la_bw_j_and_k * PSI_RHO_UPS_I * prob_psi_j_before_k) # * frac_unnotified_over_k
+            # notification.append(PSI_RHO_UPS_I * prob_psi_j_before_k) # * pi_k
 
         def func(PI_I):
             res = [PI_I.sum() - 1]
@@ -515,19 +514,22 @@ class CTModel(Model):
 
             for k in range(half_m):
                 pi_k = PI_I[k]
+                pi_k_c = PI_I[k + half_m]
+                frac_unnotified_over_k = pi_k / (pi_k + pi_k_c)
 
                 dN_k_div_N_dt = (-pi_k * (MU_IJ[k, :].sum() + PSI_I[k])
                                  + PI_I.dot(MU_IJ[:, k] + LA_IJ[:, k]
-                                            - notification[k] * pi_k))
+                                            - notification[k] * frac_unnotified_over_k))
                 res.append(pi_k * dN_div_N_dt - dN_k_div_N_dt)
             for k_c in range(half_m, m - 1):
                 pi_k_c = PI_I[k_c]
                 k = k_c - half_m
                 pi_k = PI_I[k]
+                frac_unnotified_over_k = pi_k / (pi_k + pi_k_c)
 
                 dN_k_c_div_N_dt = (-pi_k_c * (MU_IJ[k_c, :].sum() + PSI_I[k_c])
                                  + PI_I.dot(MU_IJ[:, k_c] + LA_IJ[:, k_c]
-                                            + notification[k] * pi_k))
+                                            + notification[k] * frac_unnotified_over_k))
                 res.append(pi_k_c * dN_div_N_dt - dN_k_c_div_N_dt)
             return res
 
