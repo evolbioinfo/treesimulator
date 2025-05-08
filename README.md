@@ -586,7 +586,7 @@ Once [apptainer](https://apptainer.org/docs/user/latest/quick_start.html#install
 run the following command:
 
 ```bash
-apptainer run docker://evolbioinfo/treesimlator
+apptainer run docker://evolbioinfo/treesimulator
 ```
 
 This will launch a terminal session within the container, 
