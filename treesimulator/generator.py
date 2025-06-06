@@ -435,7 +435,7 @@ def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, 
 
 
 def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_frequencies=None, max_notified_contacts=1,
-             root_state=None):
+             root_state=None, random_seed=None):
     """
     Simulates a tree (or a forest of trees, if --T is specified) for given MTBD model parameters.
 
@@ -466,6 +466,8 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
     :param root_state: State of the root node (at the beginning of the root branch).
         If not specified, the state will be drawn randomly according to equilibrium frequencies.
     :type root_state: str
+    :param random_seed: random seed for reproducibility, by default None (no fixed seed)
+    :type random_seed: int or None
     :return: the simulated forest (containing only one tree in case of a tree simulation),
         stats on total number of tips, on the number of hidden trees (0  case of a tree simulation), and on total time T,
         and the LTT numbers as a mapping between times and numbers of infected individuals
@@ -474,6 +476,10 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
 
     if max_tips < min_tips:
         raise ValueError('--max_tips cannot be smaller than --min_tips')
+
+    if random_seed is not None:
+        np.random.seed(random_seed)
+        random.seed(random_seed)
 
     if T < np.inf:
         while True:

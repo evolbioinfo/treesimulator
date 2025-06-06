@@ -66,10 +66,12 @@ def main():
                              'By default one (one-to-one transmission), '
                              'but if a larger number is given then one-to-many transmissions become possible.')
 
-    parser.add_argument('--log', required=True, type=str, help="output log file")
+    parser.add_argument('--log', required=False, default=None, type=str, help="output file to log BD model parameters")
     parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help="describe generation process")
+    parser.add_argument('-s', '--seed', type=int, default=None, help='random seed for reproducibility')
+
     params = parser.parse_args()
     logging.getLogger().handlers = []
     logging.basicConfig(level=logging.DEBUG if params.verbose else logging.INFO,
@@ -113,11 +115,14 @@ def main():
 
     forest, (total_tips, u, T, observed_frequencies), ltt = \
         generate(models, skyline_times=params.skyline_times, T=params.T,
-                 min_tips=params.min_tips, max_tips=params.max_tips, max_notified_contacts=params.max_notified_contacts)
+                 min_tips=params.min_tips, max_tips=params.max_tips, max_notified_contacts=params.max_notified_contacts,
+                 random_seed=params.seed)
 
     save_forest(forest, params.nwk)
-    save_log(models, params.skyline_times, total_tips, T, u, params.log,
-             kappa=params.max_notified_contacts, observed_frequencies=observed_frequencies)
+
+    if params.log:
+        save_log(models, params.skyline_times, total_tips, T, u, params.log,
+                 kappa=params.max_notified_contacts, observed_frequencies=observed_frequencies)
     if params.ltt:
         save_ltt(ltt, observed_ltt(forest, T), params.ltt)
 
