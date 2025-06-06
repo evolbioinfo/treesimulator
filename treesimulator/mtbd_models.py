@@ -248,8 +248,12 @@ class Model(object):
         pis = self.state_frequencies
         transition_rates_per_state = self.transition_rates.sum(axis=1)
         transmission_rates_per_state = self.transmission_rates.sum(axis=1)
-        Rs = transmission_rates_per_state * self.n_recipients / self.removal_rates
-        Rs[(transmission_rates_per_state == 0) & (self.removal_rates == 0)] = 1
+        Rs = np.ones(len(self.states), dtype=float) * np.inf
+        irremovable_mask = self.removal_rates == 0
+        Rs[~irremovable_mask] = \
+            transmission_rates_per_state[~irremovable_mask] * self.n_recipients[~irremovable_mask] \
+            / self.removal_rates[~irremovable_mask]
+        Rs[(transmission_rates_per_state == 0) & irremovable_mask] = 1
         res = {}
         n_states = len(self.states)
         is_mult = np.any(self.n_recipients != 1)
@@ -506,8 +510,9 @@ class CTModel(Model):
             prob_psi_j_before_k = PSI_I / (EXIT_I + EXIT_I[k])
             prob_psi_j_before_k[(EXIT_I + EXIT_I[k]) == 0] = 0
 
-            prob_la_bw_j_and_k = (LA_IJ[k, :] + LA_IJ[:, k]) / LA__J_plus_LA_I_
-            prob_la_bw_j_and_k[LA__J_plus_LA_I_ == 0] = 0
+            zero_mask = LA__J_plus_LA_I_ == 0
+            prob_la_bw_j_and_k = np.zeros(m, dtype=float)
+            prob_la_bw_j_and_k[~zero_mask] = (LA_IJ[k, ~zero_mask] + LA_IJ[~zero_mask, k]) / LA__J_plus_LA_I_[~zero_mask]
 
 
             notification.append(prob_la_bw_j_and_k * PSI_RHO_UPS_I * prob_psi_j_before_k) # * frac_unnotified_over_k
