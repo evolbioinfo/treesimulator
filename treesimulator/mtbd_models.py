@@ -345,8 +345,9 @@ class BirthDeathWithSuperSpreadingModel(Model):
         :param p: sampling
         """
         las = np.zeros(shape=(2, 2), dtype=float)
-        s_ratio = la_ss / la_ns
-        n_ratio = la_sn / la_nn
+        # Avoid division of zero by zero with these ifs
+        s_ratio = la_ss / la_ns if la_ss != la_ns else 1
+        n_ratio = la_sn / la_nn if la_sn != la_nn else 1
         if np.abs(s_ratio - n_ratio) > 1e-3:
             raise ValueError(
                 'transmission ratio constraint is violated: la_ss / la_ns ({}) must be equal to la_sn / la_nn ({})'
@@ -363,7 +364,9 @@ class BirthDeathWithSuperSpreadingModel(Model):
     def state_frequencies(self):
         la_ss = self.transmission_rates[1, 1]
         la_sn = self.transmission_rates[1, 0]
-        f = la_ss / (la_ss + la_sn)
+        la_ns = self.transmission_rates[0, 1]
+        la_nn = self.transmission_rates[0, 0]
+        f = la_ss / (la_ss + la_sn) if (la_ss + la_sn > 0) else la_ns / (la_nn + la_ns)
         return np.array([1 - f, f])
 
     def get_name(self):
@@ -377,7 +380,9 @@ class BirthDeathWithSuperSpreadingModel(Model):
         # in cases with 1 recipient
         # (it gives the same result due to constraints)
         result = Model.get_epidemiological_parameters(self)
-        result[SS_TRANSMISSION_RATIO] = self.transmission_rates[1, 1] / self.transmission_rates[0, 1]
+        # avoid division of zero by zero
+        result[SS_TRANSMISSION_RATIO] = self.transmission_rates[1, 1] / self.transmission_rates[0, 1] \
+            if self.transmission_rates[1, 1] != self.transmission_rates[0, 1] else 1
         result[SUPERSPREADING_FRACTION] = pis[-1]
         return result
 
