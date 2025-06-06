@@ -3,8 +3,8 @@ import unittest
 import numpy as np
 
 from treesimulator.mtbd_models import BirthDeathExposedInfectiousModel, BirthDeathWithSuperSpreadingModel, \
-    BirthDeathModel, Model, EXPOSED, INFECTIOUS, SUPERSPREADER
-
+    BirthDeathModel, Model, EXPOSED, INFECTIOUS, SUPERSPREADER, BirthDeathExposedInfectiousWithSuperSpreadingModel, \
+    CTModel
 
 
 class FrequencyTest(unittest.TestCase):
@@ -94,3 +94,87 @@ class FrequencyTest(unittest.TestCase):
         pis = model.state_frequencies
         self.assertAlmostEqual(bdss_pis[0], pis[0], places=6)
         self.assertAlmostEqual(bdss_pis[1], pis[1], places=6)
+
+
+    def test_bdeiss_mu_inf_vs_bdss(self):
+        mu = 1e8
+        psi = np.random.random() * 10
+        la = np.random.random() * 10
+        f_ss = np.random.random()
+        x_ss = 1 + np.random.random() * 24
+        rho = np.random.random()
+        mu_i = (1 - f_ss) * mu
+        mu_s = f_ss * mu
+        bdeiss_model = BirthDeathExposedInfectiousWithSuperSpreadingModel(mu_n=mu_i, mu_s=mu_s, la_n=la, la_s=x_ss * la, \
+                                                                          psi=psi, p=rho)
+        bdss_model = BirthDeathWithSuperSpreadingModel(la_nn=(1 - f_ss) * la, la_ns=f_ss * la, \
+                                                       la_sn=(1 - f_ss) * x_ss * la, la_ss=f_ss * x_ss * la, \
+                                                       psi=psi, rho=rho)
+        bdeiss_pis = bdeiss_model.state_frequencies[1:]
+        pis = bdss_model.state_frequencies
+        print(bdeiss_pis, pis)
+        self.assertAlmostEqual(bdeiss_pis[0], pis[0], places=6)
+        self.assertAlmostEqual(bdeiss_pis[1], pis[1], places=6)
+
+
+    def test_bdss_f_ss_0_vs_bd(self):
+        psi = np.random.random() * 10
+        la = np.random.random() * 10
+        f_ss = 0
+        x_ss = 1
+        rho = np.random.random()
+        bdss_model = BirthDeathWithSuperSpreadingModel(la_nn=(1 - f_ss) * la, la_ns=f_ss * la, \
+                                                       la_sn=(1 - f_ss) * x_ss * la, la_ss=f_ss * x_ss * la, \
+                                                       psi=psi, rho=rho)
+        bdss_pis = bdss_model.state_frequencies
+        print(bdss_pis)
+        self.assertAlmostEqual(bdss_pis[0], 1, places=6)
+
+    def test_bdei_mu_inf_vs_bd(self):
+        psi = np.random.random() * 10
+        la = np.random.random() * 10
+        rho = np.random.random()
+        bdei_model = BirthDeathExposedInfectiousModel(mu=1e8, la=la, psi=psi, rho=rho)
+        bdei_pis = bdei_model.state_frequencies
+        print(bdei_pis)
+        self.assertAlmostEqual(bdei_pis[1], 1, places=6)
+
+
+    def test_bdeiss_f_ss_0_vs_bdei(self):
+        mu = np.random.random() * 10
+        psi = np.random.random() * 10
+        la = np.random.random() * 10
+        f_ss = 0
+        x_ss = 1
+        rho = np.random.random()
+        mu_i = (1 - f_ss) * mu
+        mu_s = f_ss * mu
+        bdeiss_model = BirthDeathExposedInfectiousWithSuperSpreadingModel(mu_n=mu_i, mu_s=mu_s, la_n=la, la_s=x_ss * la, \
+                                                                          psi=psi, p=rho)
+        bdei_model = BirthDeathExposedInfectiousModel(mu=mu, la=la, psi=psi, rho=rho)
+        bdeiss_pis = bdeiss_model.state_frequencies
+        pis = bdei_model.state_frequencies
+        print(bdeiss_pis, pis)
+        self.assertAlmostEqual(bdeiss_pis[0], pis[0], places=6)
+        self.assertAlmostEqual(bdeiss_pis[1], pis[1], places=6)
+
+
+    def test_bdeissct_ups_0_vs_bdeiss(self):
+        mu = np.random.random() * 10
+        psi = np.random.random() * 10
+        la = np.random.random() * 10
+        f_ss = np.random.random()
+        x_ss = 1 + np.random.random() * 24
+        x_c = 1 + np.random.random() * 250
+        rho = np.random.random()
+        mu_i = (1 - f_ss) * mu
+        mu_s = f_ss * mu
+        bdeiss_model = BirthDeathExposedInfectiousWithSuperSpreadingModel(mu_n=mu_i, mu_s=mu_s, la_n=la, la_s=x_ss * la, \
+                                                                          psi=psi, p=rho)
+        bdeissct_model = CTModel(bdeiss_model, phi=psi * x_c, upsilon=0)
+        bdeiss_pis = bdeiss_model.state_frequencies
+        pis = bdeissct_model.state_frequencies[: 3]
+        print(bdeiss_pis, pis)
+        self.assertAlmostEqual(bdeiss_pis[0], pis[0], places=3)
+        self.assertAlmostEqual(bdeiss_pis[1], pis[1], places=3)
+        self.assertAlmostEqual(bdeiss_pis[2], pis[2], places=3)
