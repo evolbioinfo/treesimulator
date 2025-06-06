@@ -4,12 +4,12 @@ Simulation of rooted phylogenetic trees under a given Multi-Type Birth–Death (
 with or without contact tracing (CT), 
 and with or without Skyline. 
 
-## Preprint
-treesimulator is described in the S1 Appendix of the following article:
+## Article
+treesimulator is described in the [S1 Appendix](https://doi.org/10.1371/journal.pcbi.1012461.s001) of the following article:
 
-Anna Zhukova, Olivier Gascuel. Accounting for contact tracing in epidemiological birth-death models. medRxiv 2024.09.09.24313296; doi:[10.1101/2024.09.09.24313296](https://www.medrxiv.org/content/10.1101/2024.09.09.24313296v2.supplementary-material)
+Anna Zhukova, Olivier Gascuel (2025) Accounting for contact tracing in epidemiological birth-death models. _PLOS Comput Biol_ 21(5): e1012461; doi:[10.1371/journal.pcbi.1012461](https://doi.org/10.1371/journal.pcbi.1012461)
 
-[![DOI:10.1101/2024.09.09.24313296](https://zenodo.org/badge/DOI/10.1101/2024.09.09.24313296.svg)](https://doi.org/10.1101/2024.09.09.24313296)
+[![DOI:10.1371/journal.pcbi.1012461](https://zenodo.org/badge/DOI/10.1371/journal.pcbi.1012461.svg)](https://doi.org/10.1371/journal.pcbi.1012461)
 [![GitHub release](https://img.shields.io/github/v/release/evolbioinfo/treesimulator.svg)](https://github.com/evolbioinfo/treesimulator/releases)
 [![PyPI version](https://badge.fury.io/py/treesimulator.svg)](https://pypi.org/project/treesimulator/)
 [![PyPI downloads](https://shields.io/pypi/dm/treesimulator)](https://pypi.org/project/treesimulator/)
