@@ -7,9 +7,7 @@ from treesimulator.mtbd_models import BirthDeathExposedInfectiousModel, CTModel
 
 def main():
     """
-    Entry point for tree/forest generation using the BDEI-Skyline model with command-line arguments.
-    Now implemented using a list-based approach rather than a dedicated skyline class.
-    Supports time-varying contact tracing parameters.
+    Entry point for tree/forest generation with the BDEI-CT-Skyline model with command-line arguments.
 
     For skyline models, the first model (models[0]) always starts at time 0, and the time points list
     specifies when to switch to each subsequent model.
@@ -17,158 +15,109 @@ def main():
     """
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Simulates a tree (or a forest of trees) with the BDEI-Skyline model using a list-based approach.")
+    parser = \
+        argparse.ArgumentParser(
+            description="Simulates a tree (or a forest of trees) for given BDEI-CT-Skyline model parameters. "
+                        "If a simulation leads to less than --min_tips tips, it is repeated.")
+    parser.add_argument('--min_tips', required=True, type=int,
+                        help="desired minimal bound on the total number of simulated leaves. "
+                             "For a tree simulation, "
+                             "if --min_tips and --max_tips are equal, exactly that number of tips will be simulated. "
+                             "If --min_tips is less than --max_tips, "
+                             "a value randomly drawn between one and another will be simulated.")
+    parser.add_argument('--max_tips', required=True, type=int,
+                        help="desired maximal bound on the total number of simulated leaves"
+                             "For a tree simulation, "
+                             "if --min_tips and --max_tips are equal, exactly that number of tips will be simulated. "
+                             "If --min_tips is less than --max_tips, "
+                             "a value randomly drawn between one and another will be simulated.")
+    parser.add_argument('--T', required=False, default=np.inf, type=float,
+                        help="Total simulation time. If specified, a forest will be simulated instead of one tree. "
+                             "The trees in this forest will be simulated during the given time, "
+                             "till the --min_tips number is reached. If after simulating the last tree, "
+                             "the forest exceeds the --max_tips number, the process will be restarted.")
 
-    parser.add_argument('--min_tips', required=True, type=int, help="Minimum number of simulated leaves.")
-    parser.add_argument('--max_tips', required=True, type=int, help="Maximum number of simulated leaves.")
-    parser.add_argument('--T', required=False, default=np.inf, type=float, help="Total simulation time.")
     parser.add_argument('--mu', required=True, nargs='+', type=float,
-                        help="List of E->I transition rates for each interval.")
+                        help="List of becoming-infectious rates (one per skyline interval).")
     parser.add_argument('--la', required=True, nargs='+', type=float,
-                        help="List of transmission rates for each interval.")
+                        help="List of transmission rates (one per skyline interval).")
     parser.add_argument('--psi', required=True, nargs='+', type=float,
-                        help="List of removal rates for each interval.")
+                        help="List of removal rates (one per skyline interval).")
     parser.add_argument('--p', required=True, nargs='+', type=float,
-                        help="List of sampling probabilities for each interval.")
-    parser.add_argument('--t', nargs='+', type=float,
-                        help="List of time points specifying when to switch from model i to model i+1. "
-                             "Length should be one less than the number of parameter sets, since model[0] "
-                             "always starts at time 0. Must be in ascending order.")
+                        help="List of sampling probabilities (one per skyline interval).")
+    parser.add_argument('--skyline_times', nargs='*', type=float,
+                        help="List of time points specifying when to switch from model i to model i+1 in the Skyline."
+                             "Must be sorted in ascending order and contain one less elements "
+                             "than the number of models in the Skyline."
+                             "The first model always starts at time 0.")
 
-    # Contact tracing parameters - now as lists for time-varying support
-    parser.add_argument('--upsilon', nargs='+', type=float, default=[0.0],
-                        help='List of notification probabilities for each interval. Use 0 for no contact tracing.')
-    parser.add_argument('--phi', nargs='+', type=float, default=[0.0],
-                        help='List of notified removal rates for each interval. Used with contact tracing.')
+    # Contact tracing parameters
+    parser.add_argument('--upsilon', nargs='*', type=float,
+                        help='List of notification probabilities (one per skyline interval). Omit for no contact tracing.')
+    parser.add_argument('--phi', nargs='*', type=float,
+                        help='List of notified removal rates (one per skyline interval). Only used if upsilon is specified.')
     parser.add_argument('--max_notified_contacts', required=False, default=1, type=int,
                         help='Maximum notified contacts')
 
     parser.add_argument('--avg_recipients', required=False, default=1, type=float,
-                        help='Average number of recipients per transmission.')
-    parser.add_argument('--log', required=True, type=str, help="Output log file")
-    parser.add_argument('--nwk', required=True, type=str, help="Output tree or forest file")
-    parser.add_argument('--ltt', required=False, default=None, type=str, help="Output LTT file")
-    parser.add_argument('-v', '--verbose', action='store_true', help="Verbose output")
+                        help='average number of recipients per transmission. '
+                             'By default one (one-to-one transmission), '
+                             'but if a larger number is given then one-to-many transmissions become possible.')
 
+    parser.add_argument('--log', required=True, type=str, help="output log file")
+    parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
+    parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help="describe generation process")
     params = parser.parse_args()
-
-    # Set up logging AFTER parsing arguments (moved from before parser definition)
     logging.getLogger().handlers = []
     logging.basicConfig(level=logging.DEBUG if params.verbose else logging.INFO,
                         format='%(asctime)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
-    try:
-        # If upsilon/phi are single values, replicate them for all time points
-        if len(params.upsilon) == 1 and len(params.mu) > 1:
-            params.upsilon = params.upsilon * len(params.mu)
-        if len(params.phi) == 1 and len(params.mu) > 1:
-            params.phi = params.phi * len(params.mu)
+    # Check that all parameter arrays have the same length
+    n_models = len(params.la)
+    if n_models != len(params.psi) or n_models != len(params.p) or n_models != (params.mu):
+        raise ValueError("All parameter lists (mu, la, psi, p) must have the same length")
+    is_ct = params.upsilon
+    if is_ct:
+        if n_models != len(params.upsilon) or n_models != len(params.phi):
+            raise ValueError("Contact-tracing parameter lists must have the same length "
+                             "as the other parameter lists (mu, la, psi, p)")
 
-        # Validate all parameters have the same length
-        if len(params.mu) != len(params.la) or len(params.mu) != len(params.psi) or \
-                len(params.mu) != len(params.p) or len(params.upsilon) != len(params.mu) or \
-                len(params.phi) != len(params.mu):
-            raise ValueError("All parameter arrays (mu, la, psi, p, upsilon, phi) must have the same length")
+    if n_models > 1 and (not params.skyline_times or len(params.skyline_times) != n_models - 1):
+        raise ValueError(f'One should specify {n_models - 1} skyline times for {n_models}, '
+                         f'got {len(params.skyline_times)} instead.')
 
-        # For skyline model, time points should be one less than parameter count
-        if len(params.mu) > 1:  # If we have multiple parameter sets, it's a skyline model
-            # Check if time points are provided
-            if params.t is None:
-                raise ValueError("Time points (--t) must be provided when using multiple parameter sets")
+    if params.T < np.inf:
+        logging.info('Total time T={}'.format(params.T))
 
-            # Check number of time points
-            if len(params.t) != len(params.mu) - 1:
-                raise ValueError(
-                    f"For skyline models, the number of time points must be one less than the number of parameter sets "
-                    f"since model[0] always starts at time 0. Got {len(params.mu)} parameter sets and {len(params.t)} time points.")
+    is_mult = params.avg_recipients != 1
 
-            # Verify that times are sorted
-            for i in range(len(params.t) - 1):
-                if params.t[i] >= params.t[i + 1]:
-                    raise ValueError(
-                        f"Time points must be in ascending order. Found t[{i}] = {params.t[i]} >= t[{i + 1}] = {params.t[i + 1]}")
+    models = []
+    for i in range(n_models):
+        logging.info('{}BDEI{}{} model parameters are:\n\tmu={}\n\tlambda={}\n\tpsi={}\n\tp={}{}{}'
+                     .format('For time interval {}-{},\n'.format(0 if i == 0 else params.skyline_times[i - 1],
+                                                                 params.skyline_times[i] if i < (n_models - 1) else '...')
+                             if n_models > 1 else '',
+                             '-MULT' if is_mult else '',
+                             '-CT' if is_ct else '',
+                             params.mu[i], params.la[i], params.psi[i], params.p[i],
+                             '\n\tavg_recipient_number={}'.format(params.avg_recipients) if is_mult else '',
+                             '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
+        model = BirthDeathExposedInfectiousModel(p=params.p[i],
+                                                 mu=params.mu[i], la=params.la[i], psi=params.psi[i],
+                                                 n_recipients=[1, params.avg_recipients])
+        if is_ct:
+            model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i])
+        models.append(model)
 
-        # Log the configuration
-        is_mult = params.avg_recipients != 1
-        mult_str = '-MULT' if is_mult else ''
-        logging.info(f'BDEI{mult_str}-Skyline parameters are:')
-        logging.info(f'mu values: {params.mu}')
-        logging.info(f'lambda values: {params.la}')
-        logging.info(f'psi values: {params.psi}')
-        logging.info(f'p values: {params.p}')
+    forest, (total_tips, u, T), ltt = generate(models, skyline_times=params.skyline_times,
+                                               min_tips=params.min_tips, max_tips=params.max_tips, T=params.T,
+                                               max_notified_contacts=params.max_notified_contacts)
 
-        if len(params.mu) > 1:
-            # Include time 0 in the display of time points
-            display_times = ['0.0'] + [str(t) for t in params.t]
-            logging.info(f'Time points: [{", ".join(display_times)}]')
-
-        logging.info(f'upsilon values: {params.upsilon}')
-        logging.info(f'phi values: {params.phi}')
-        if is_mult:
-            logging.info(f'Average recipients: {params.avg_recipients}')
-
-        # Create a list of BDEI models
-        models = []
-        for i in range(len(params.mu)):
-            # Display time interval info
-            if i == 0:
-                time_info = "starting at time 0"
-            else:
-                time_info = f"for times >= {params.t[i - 1]}"
-
-            if i < len(params.mu) - 1:
-                time_info += f" and < {params.t[i]}"
-
-            model_name = f'BDEI{i + 1}'
-            logging.info(
-                f'Creating model {model_name} {time_info} with mu={params.mu[i]}, la={params.la[i]}, psi={params.psi[i]}, p={params.p[i]}')
-
-            # Create a BDEI model with the parameters for this time interval
-            model = BirthDeathExposedInfectiousModel(
-                mu=params.mu[i],
-                la=params.la[i],
-                psi=params.psi[i],
-                p=params.p[i],
-                n_recipients=[params.avg_recipients, params.avg_recipients]
-            )
-
-            # Apply contact tracing if specified for this time interval
-            if params.upsilon[i] > 0:
-                model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i])
-                logging.info(
-                    f'Added contact tracing to model {model_name} with upsilon={params.upsilon[i]}, phi={params.phi[i]}')
-
-            models.append(model)
-
-        if params.T < np.inf:
-            logging.info(f'Total time T={params.T}')
-
-        # Generate forest using the skyline model approach (list of models)
-        forest, (total_tips, u, max_time), ltt = generate(
-            models,
-            min_tips=params.min_tips,
-            max_tips=params.max_tips,
-            T=params.T,
-            skyline_times=params.t if len(params.mu) > 1 else None,  # Only pass time points for skyline models
-            max_notified_contacts=params.max_notified_contacts
-        )
-
-        # Save outputs
-        save_forest(forest, params.nwk)
-        # For logging, use the first model (without the skyline parameter which isn't supported)
-        save_log(models[0], total_tips, max_time, u, params.log)
-        if params.ltt:
-            save_ltt(ltt, observed_ltt(forest, max_time), params.ltt)
-
-        logging.info("Simulation completed successfully")
-
-    except RuntimeError as e:
-        logging.error(f"Runtime error during simulation: {e}")
-    except ValueError as e:
-        logging.error(f"Value error during simulation: {e}")
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+    save_forest(forest, params.nwk)
+    save_log(models, params.skyline_times, total_tips, T, u, params.log)
+    if params.ltt:
+        save_ltt(ltt, observed_ltt(forest, T), params.ltt)
 
 
 if '__main__' == __name__:
