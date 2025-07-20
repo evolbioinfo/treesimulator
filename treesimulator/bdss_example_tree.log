@@ -1,0 +1,4 @@
+R0,transition rates,transmission rates,removal rates,sampling probabilities,n_recipients,tips,time,hidden_trees
+1.726649916142161,[[0.  0.2]
+ [0.  0. ]],[[1. 0.]
+ [8. 0.]],[1. 1.],[0.5 0.5],[1 1],100,7.073759449310874,0
