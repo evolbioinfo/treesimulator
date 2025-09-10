@@ -45,12 +45,6 @@ def main():
     # States parameter
     parser.add_argument('--states', required=True, nargs='+', type=str, help="model states")
 
-    parser.add_argument('--skyline_times', nargs='+', type=float,
-                        help="List of time points specifying when to switch from model i to model i+1 in the Skyline."
-                             "Must be sorted in ascending order and contain one less elements "
-                             "than the number of models in the Skyline."
-                             "The first model always starts at time 0.")
-
     parser.add_argument('--transition_rates', nargs='+', type=float,
                         help="transition rate matrix, row after row, in the same order as model states, "
                              "e.g. if a model has 2 states given as --states E I,"
@@ -180,16 +174,16 @@ def main():
                              '-MULT' if is_mult else '',
                              '-CT' if is_ct else '',
                              params.states,
-                             transition_rates[i, :, :],
-                             transmission_rates[i, :, :],
-                             removal_rates[i, :],
-                             sampling_probabilities[i, :],
+                             transition_rates[:, :, i],
+                             transmission_rates[:, :, i],
+                             removal_rates[:, i],
+                             sampling_probabilities[:, i],
                              '\n\tavg_recipient_numbers={}'.format(params.avg_recipients) if is_mult else '',
                              '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
         model = Model(states=params.states,
-                      transmission_rates=transmission_rates[i, :, :],
-                      transition_rates=transition_rates[i, :, :],
-                      removal_rates=removal_rates[i, :], ps=sampling_probabilities[i, :],
+                      transmission_rates=transmission_rates[:, :, i],
+                      transition_rates=transition_rates[:, :, i],
+                      removal_rates=removal_rates[:, i], ps=sampling_probabilities[:, i],
                       n_recipients=params.avg_recipients)
         if is_ct:
             model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i],

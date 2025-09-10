@@ -28,8 +28,8 @@ class FrequencyTest(unittest.TestCase):
         la = np.random.random() * 10
         model = BirthDeathExposedInfectiousModel(mu=mu, la=la, psi=psi, p=np.random.random())
         pi_I = (-(mu + psi) + np.sqrt(np.power(mu - psi, 2) + 4 * mu * la)) / (2 * (la - psi))
-        self.assertAlmostEqual(1 - pi_I, model.state_frequencies[0], places=6)
-        self.assertAlmostEqual(pi_I, model.state_frequencies[1], places=6)
+        self.assertAlmostEqual(np.float64(1 - pi_I), model.state_frequencies[0], places=6)
+        self.assertAlmostEqual(np.float64(pi_I), model.state_frequencies[1], places=6)
 
     def test_bdss(self):
         psi = np.random.random() * 10
@@ -39,8 +39,8 @@ class FrequencyTest(unittest.TestCase):
         model = BirthDeathWithSuperSpreadingModel(la_sn=x_ss * la * (1 - f_ss), la_ss=x_ss * la * f_ss,
                                                   la_nn=(1 - f_ss) * la, la_ns=f_ss * la,
                                                   psi=psi, p=np.random.random())
-        self.assertEqual(1 - f_ss, model.state_frequencies[0])
-        self.assertEqual(f_ss, model.state_frequencies[1])
+        self.assertAlmostEqual(np.float64(1 - f_ss), model.state_frequencies[0], places=6)
+        self.assertAlmostEqual(np.float64(f_ss), model.state_frequencies[1], places=6)
 
     def test_mtbd_bdei_R_is_one(self):
         mu = np.random.random() * 10
@@ -173,7 +173,7 @@ class FrequencyTest(unittest.TestCase):
                                                                           psi=psi, p=rho)
         bdeissct_model = CTModel(bdeiss_model, phi=psi * x_c, upsilon=0)
         bdeiss_pis = bdeiss_model.state_frequencies
-        pis = bdeissct_model.state_frequencies[: 3]
+        pis = bdeissct_model.state_frequencies
         print(bdeiss_pis, pis)
         self.assertAlmostEqual(bdeiss_pis[0], pis[0], places=3)
         self.assertAlmostEqual(bdeiss_pis[1], pis[1], places=3)

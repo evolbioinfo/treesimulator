@@ -438,7 +438,8 @@ class CTModel(Model):
         * phi -- the removal rate after being notified
     """
 
-    def __init__(self, model, phi=np.inf, upsilon=0.5, allow_irremovable_states=False, *args, **kwargs):
+    def __init__(self, model, phi=np.inf, upsilon=0.5, allow_irremovable_states=False,
+                 state_frequencies=None, *args, **kwargs):
         """
         
         :param model: initial model, whose states will now be contact-traced
@@ -476,11 +477,13 @@ class CTModel(Model):
         self.__irremovable_states = allow_irremovable_states
 
         pis = None
-        try:
-            pis = self._ct_state_frequencies(transition_rates, transmission_rates, removal_rates, rhos, upsilon)
-            pis /= pis.sum()
-        except Exception as e:
-            logging.warning(f'Could not calculate the CT equilibrium frequencies due to {e}')
+        if state_frequencies is not None:
+            self.__pis = np.array(state_frequencies)
+            self.check_frequencies()
+        else:
+            # Set contact frequencies to zero, as one can only be notified by someone else,
+            # hence the tree root cannot be notified
+            pis = np.pad(model.state_frequencies, (0, model.state_frequencies.shape[0]), mode='constant', constant_values=0)
 
         Model.__init__(self, states=[_ for _ in model.states] + [f'{_}-{CONTACT}' for _ in model.states],
                        transition_rates=transition_rates,
@@ -494,58 +497,6 @@ class CTModel(Model):
         self.__phi = phi
         self.check_upsilon()
         self.model = model
-
-    def _ct_state_frequencies(self, MU_IJ, LA_IJ, PSI_I, RHO_I, upsilon):
-        LA_I_ = LA_IJ.sum(axis=1)
-        LA__J = LA_IJ.sum(axis=0)
-        LA__J_plus_LA_I_ = (LA__J + LA_I_)
-        MU_I_ = MU_IJ.sum(axis=1)
-        EXIT_I = MU_I_ + PSI_I
-        PSI_RHO_UPS_I = PSI_I * RHO_I * upsilon
-        m = len(PSI_I)
-        half_m = int(m / 2)  # non-notified
-
-        notification = []
-        for k in range(half_m):
-            prob_psi_j_before_k = PSI_I / (EXIT_I + EXIT_I[k])
-            prob_psi_j_before_k[(EXIT_I + EXIT_I[k]) == 0] = 0
-
-            zero_mask = LA__J_plus_LA_I_ == 0
-            prob_la_bw_j_and_k = np.zeros(m, dtype=float)
-            prob_la_bw_j_and_k[~zero_mask] = (LA_IJ[k, ~zero_mask] + LA_IJ[~zero_mask, k]) / LA__J_plus_LA_I_[~zero_mask]
-
-
-            notification.append(prob_la_bw_j_and_k * PSI_RHO_UPS_I * prob_psi_j_before_k) # * frac_unnotified_over_k
-            # notification.append(PSI_RHO_UPS_I * prob_psi_j_before_k) # * pi_k
-
-        def func(PI_I):
-            res = [PI_I.sum() - 1]
-            dN_div_N_dt = PI_I.dot(LA_I_ - PSI_I)
-
-            for k in range(half_m):
-                pi_k = PI_I[k]
-                pi_k_c = PI_I[k + half_m]
-                frac_unnotified_over_k = pi_k / (pi_k + pi_k_c)
-
-                dN_k_div_N_dt = (-pi_k * (MU_IJ[k, :].sum() + PSI_I[k])
-                                 + PI_I.dot(MU_IJ[:, k] + LA_IJ[:, k]
-                                            - notification[k] * frac_unnotified_over_k))
-                res.append(pi_k * dN_div_N_dt - dN_k_div_N_dt)
-            for k_c in range(half_m, m - 1):
-                pi_k_c = PI_I[k_c]
-                k = k_c - half_m
-                pi_k = PI_I[k]
-                frac_unnotified_over_k = pi_k / (pi_k + pi_k_c)
-
-                dN_k_c_div_N_dt = (-pi_k_c * (MU_IJ[k_c, :].sum() + PSI_I[k_c])
-                                 + PI_I.dot(MU_IJ[:, k_c] + LA_IJ[:, k_c]
-                                            + notification[k] * frac_unnotified_over_k))
-                res.append(pi_k_c * dN_div_N_dt - dN_k_c_div_N_dt)
-            return res
-
-        res = least_squares(func, x0=np.ones(m) / m, bounds=[0, 1])
-        return res.x
-
 
     def clone(self):
         return CTModel(model=self.model, phi=self.__phi, upsilon=self.__upsilon,
@@ -569,11 +520,11 @@ class CTModel(Model):
         result = self.model.get_epidemiological_parameters()
         result['upsilon'] = self.upsilon
 
-        for state_i in self.model.states:
-            if f'pi_{state_i}' in result:
-                del result[f'pi_{state_i}']
-        for state_i, freq in zip(self.states, self.state_frequencies):
-            result[f'pi_{state_i}'] = freq
+        # for state_i in self.model.states:
+        #     if f'pi_{state_i}' in result:
+        #         del result[f'pi_{state_i}']
+        # for state_i, freq in zip(self.states, self.state_frequencies):
+        #     result[f'pi_{state_i}'] = freq
 
         n_contact_states = len(self.model.states)
         for state_i, phi in zip(self.states[n_contact_states: ], self.removal_rates[n_contact_states:]):

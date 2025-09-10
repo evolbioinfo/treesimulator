@@ -67,12 +67,7 @@ def simulate_tree_gillespie(models, skyline_times=None, max_time=np.inf, min_sam
     if len(root_states) > 0:
         root_state = root_states[0]
     else:
-        # If it is a CT model, pick the root state among non-notified ones
-        if isinstance(current_model, CTModel):
-            root_state = np.random.choice(state_indices[: int(len(state_indices) / 2)],
-                                          size=1, p=current_model.model.state_frequencies)[0]
-        else:
-            root_state = np.random.choice(state_indices, size=1, p=state_frequencies)[0]
+        root_state = np.random.choice(state_indices, size=1, p=state_frequencies)[0]
 
     time = 0
     infectious_nums = np.zeros(num_states, dtype=np.int64)
