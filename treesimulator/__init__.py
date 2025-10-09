@@ -7,12 +7,13 @@ DIST_TO_START = 'D'
 TIME_TILL_NOW = 'T'
 
 
-def save_forest(forest, nwk, state_feature=STATE):
+def save_forest(forest, nwk, state_feature=STATE, format=5):
     os.makedirs(os.path.dirname(os.path.abspath(nwk)), exist_ok=True)
     with open(nwk, 'w+') as f:
         for tree in forest:
             features = [state_feature] if state_feature is not None else []
-            nwk = tree.write(format=5, format_root_node=True, features=features)
+            features.extend(['sampled', 'visible'])
+            nwk = tree.write(format=format, format_root_node=True, features=features)
             f.write('{}\n'.format(nwk))
 
 
@@ -30,12 +31,12 @@ def save_ltt(real_ltt, observed_ltt, ltt_file):
             f.write('{}\t{}\t{}\n'.format(time, real, observed))
 
 
-def save_log(models, skyline_times, total_tips, T, u, log, kappa=0, observed_frequencies=None):
+def save_log(log, models, skyline_times, epidemic):
     os.makedirs(os.path.dirname(os.path.abspath(log)), exist_ok=True)
     if skyline_times is None:
         skyline_times = []
-    skyline_times = [_ for _ in skyline_times if _ <= T]
-    skyline_times += [T]
+    skyline_times = [_ for _ in skyline_times if _ <= epidemic.T]
+    skyline_times += [epidemic.T]
     is_ct = isinstance(models[0], CTModel)
     with (open(log, 'w+') as f):
         states = models[0].states
@@ -46,19 +47,24 @@ def save_log(models, skyline_times, total_tips, T, u, log, kappa=0, observed_fre
         pi_keys = '' if len(states) <= 1  else \
             ((','.join(f'{pi}_observed' for pi in pis) if is_ct \
                   else ','.join(f'{pi},{pi}_observed' for pi in pis)) + ',')
-        f.write('{}{},{}tips,hidden_trees,end_time\n'\
+        f.write('{}{},{}tips,hidden_trees,end_time{}\n'\
                 .format(','.join(keys),
                         ',kappa' if is_ct else '',
-                        pi_keys))
-        for model, end_time, obs in zip(models, skyline_times, observed_frequencies):
-            tips = '' if end_time < T else total_tips
+                        pi_keys,
+                        ',avg_R_observed,avg_d_observed,zeta_observed' if epidemic.R_e is not None else ''))
+        extras = f',{epidemic.z:g},{epidemic.R_e:g},{epidemic.d:g}' if epidemic.R_e is not None else ''
+        extras_empty = f',,,' if epidemic.R_e is not None else ''
+        u = epidemic.u
+        for model, end_time, obs in zip(models, skyline_times, epidemic.pis):
+            tips = '' if end_time < epidemic.T else epidemic.n_tips
             params = model.get_epidemiological_parameters()
             pi_values = '' if len(states) <= 1  else \
                 ((','.join(f'{o:g}' for o in obs) if is_ct \
                       else ','.join(f'{pi:g},{o:g}' for (pi, o) in zip((params[_] for _ in pis), obs))) + ',')
-            f.write('{}{},{}{},{},{:g}\n'
+            f.write('{}{},{}{},{},{:g}{}\n'
                     .format(','.join(f'{params[k]:g}' for k in keys),
-                            f',{kappa:g}' if is_ct else '',
+                            f',{epidemic.kappa:g}' if is_ct else '',
                             pi_values,
-                            tips, u, end_time))
+                            tips, u, end_time,
+                            extras_empty if end_time < epidemic.T else extras))
             u = ''

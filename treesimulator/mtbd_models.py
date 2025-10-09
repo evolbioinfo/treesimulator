@@ -277,6 +277,10 @@ class Model(object):
                 res[f'p_{state_i}'] = self.ps[i]
         return res
 
+    def get_avg_transmission_rate(self):
+        """Average transmission rate over all states weighted by their frequencies"""
+        return (self.transmission_rates.sum(axis=1) * self.state_frequencies).sum()
+
 
 class BirthDeathExposedInfectiousModel(Model):
 
@@ -321,6 +325,11 @@ class BirthDeathExposedInfectiousModel(Model):
         result[INCUBATION_FRACTION] = result[f'd_{EXPOSED}'] / (result[f'd_{EXPOSED}'] + result[f'd_{INFECTIOUS}'])
         return result
 
+    def get_avg_infection_time(self):
+        mu = self.transition_rates[0, :].sum()
+        psi = self.removal_rates[1]
+        return 1 / mu + 1 / psi
+
 
 class BirthDeathModel(Model):
 
@@ -335,6 +344,10 @@ class BirthDeathModel(Model):
 
     def get_name(self):
         return 'BD'
+
+    def get_avg_infection_time(self):
+        psi = self.removal_rates[0]
+        return 1 / psi
 
 
 class BirthDeathWithSuperSpreadingModel(Model):
@@ -390,6 +403,10 @@ class BirthDeathWithSuperSpreadingModel(Model):
         result[SUPERSPREADING_FRACTION] = pis[-1]
         return result
 
+    def get_avg_infection_time(self):
+        psi = self.removal_rates[0]
+        return 1 / psi
+
 
 class BirthDeathExposedInfectiousWithSuperSpreadingModel(Model):
 
@@ -429,6 +446,11 @@ class BirthDeathExposedInfectiousWithSuperSpreadingModel(Model):
         result[SUPERSPREADING_FRACTION] = pis[2] / (pis[1] + pis[2])
         result[INCUBATION_FRACTION] = result[f'd_{EXPOSED}'] / (result[f'd_{EXPOSED}'] + result[f'd_{INFECTIOUS}'])
         return result
+
+    def get_avg_infection_time(self):
+        mu = self.transition_rates[0, :].sum()
+        psi = self.removal_rates[1]
+        return 1 / mu + 1 / psi
 
 
 class CTModel(Model):

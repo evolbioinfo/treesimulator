@@ -114,7 +114,9 @@ def main():
 
 
     parser.add_argument('--log', required=False, default=None, type=str, help="output file to log model parameters")
-    parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
+    parser.add_argument('--nwk', required=True, type=str, help="output sampled tree or forest file")
+    parser.add_argument('--nwk_full', required=False, type=str, default=None,
+                        help="output full transmission tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help="describe generation process")
     parser.add_argument('-s', '--seed', type=int, default=None, help='random seed for reproducibility')
@@ -130,11 +132,24 @@ def main():
     else:
         n_models = 1
 
+    def reshape(input_list, n_states, n_models):
+        """
+        Reshapes a list of n_states * n_states * n_models into a 3D array of shape (n_states, n_states, n_models),
+        and if a list only contains n_states * n_models values then reshapes it into a 2D array of shape (n_states, n_models).
+
+        :param input_list: the flattened list to reshape, giving row1 for model1, row2 for model1, ..., rowN for model1,
+                           row1 for model2, ..., rowN for modelM
+        :return: 3D array of shape (n_states, n_states, n_models) or 2D array of shape (n_states, n_models) depending on the input
+        """
+        if len(input_list) == n_states * n_models:
+            return np.array(input_list).reshape((n_models, n_states)).T
+        else:
+            return np.array(input_list).reshape(n_models, n_states, n_states).transpose(1, 2, 0)
     try:
-        transition_rates = np.array(params.transition_rates).reshape((n_states, n_states, n_models))
-        transmission_rates = np.array(params.transmission_rates).reshape((n_states, n_states, n_models))
-        removal_rates = np.array(params.removal_rates).reshape((n_states, n_models))
-        sampling_probabilities = np.array(params.sampling_probabilities).reshape((n_states, n_models))
+        transition_rates = reshape(params.transition_rates, n_states, n_models)
+        transmission_rates = reshape(params.transmission_rates, n_states, n_models)
+        removal_rates = reshape(params.removal_rates, n_states, n_models)
+        sampling_probabilities = reshape(params.sampling_probabilities, n_states, n_models)
     except:
         raise ValueError(f'Got {n_models - 1} skyline times, and {n_states} states, '
                          f'hence expecting {n_models} model(s) with {n_states} x {n_states} x {n_models} transition rates, '
@@ -190,18 +205,21 @@ def main():
                             allow_irremovable_states=params.allow_irremovable_states)
         models.append(model)
 
-    forest, (total_tips, u, T, observed_frequencies), ltt = \
-        generate(models, skyline_times=params.skyline_times, T=params.T,
-                 min_tips=params.min_tips, max_tips=params.max_tips, max_notified_contacts=params.max_notified_contacts,
-                 root_state=params.root_state, random_seed=params.seed)
+    epidemic = generate(models, skyline_times=params.skyline_times, T=params.T,
+                        min_tips=params.min_tips, max_tips=params.max_tips,
+                        max_notified_contacts=params.max_notified_contacts,
+                        random_seed=params.seed, return_LTT=params.ltt is not None,
+                        return_full_forest=params.nwk_full is not None,
+                        return_stats=False)
 
-    save_forest(forest, params.nwk)
+    save_forest(epidemic.sampled_forest, params.nwk)
+    if params.nwk_full is not None:
+        save_forest(epidemic.full_forest, params.nwk_full, format=3)
 
     if params.log:
-        save_log(models, params.skyline_times, total_tips, T, u, params.log, kappa=params.max_notified_contacts,
-                 observed_frequencies=observed_frequencies)
+        save_log(params.log, models, params.skyline_times, epidemic)
     if params.ltt:
-        save_ltt(ltt, observed_ltt(forest, T), params.ltt)
+        save_ltt(epidemic.LTT, observed_ltt(epidemic.sampled_forest, epidemic.T), params.ltt)
 
 
 if '__main__' == __name__:

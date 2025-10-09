@@ -77,7 +77,9 @@ def main():
                              'based on the state equilibrium frequencies.')
 
     parser.add_argument('--log', required=False, default=None, type=str, help="output file to log BDEI model parameters")
-    parser.add_argument('--nwk', required=True, type=str, help="output tree or forest file")
+    parser.add_argument('--nwk', required=True, type=str, help="output sampled tree or forest file")
+    parser.add_argument('--nwk_full', required=False, type=str, default=None,
+                        help="output full transmission tree or forest file")
     parser.add_argument('--ltt', required=False, default=None, type=str, help="output LTT file")
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help="describe generation process")
     parser.add_argument('-s', '--seed', type=int, default=None, help='random seed for reproducibility')
@@ -125,17 +127,22 @@ def main():
                             allow_irremovable_states=params.allow_irremovable_states)
         models.append(model)
 
-    forest, (total_tips, u, T, observed_frequencies), ltt = \
-        generate(models, skyline_times=params.skyline_times, T=params.T,
-                 min_tips=params.min_tips, max_tips=params.max_tips, max_notified_contacts=params.max_notified_contacts,
-                 root_state=params.root_state, random_seed=params.seed)
+    epidemic = generate(models, skyline_times=params.skyline_times, T=params.T,
+                        min_tips=params.min_tips, max_tips=params.max_tips,
+                        max_notified_contacts=params.max_notified_contacts,
+                        random_seed=params.seed, return_LTT=params.ltt is not None,
+                        return_full_forest=params.nwk_full is not None,
+                        return_stats=False)
 
-    save_forest(forest, params.nwk)
+    save_forest(epidemic.sampled_forest, params.nwk)
+    if params.nwk_full is not None:
+        save_forest(epidemic.full_forest, params.nwk_full, format=3)
+
     if params.log:
-        save_log(models, params.skyline_times, total_tips, T, u, params.log,
-                 kappa=params.max_notified_contacts, observed_frequencies=observed_frequencies)
+        save_log(params.log, models, params.skyline_times, epidemic)
     if params.ltt:
-        save_ltt(ltt, observed_ltt(forest, T), params.ltt)
+        save_ltt(epidemic.LTT, observed_ltt(epidemic.sampled_forest, epidemic.T), params.ltt)
+
 
 
 if '__main__' == __name__:
