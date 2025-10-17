@@ -33,13 +33,21 @@ m removal (becoming non-infectious) rate parameters:
 m sampling probability upon removal parameters:
 * p<sub>i</sub> -- probability to sample the pathogen of an individual in state i upon removal (1 ≤ i ≤ m), where 0 < p<sub>i</sub> ≤ 1
 
-Using these probabilities, one can calculate the equilibrium frequencies $π<sub>i</sub>$ of the model's states, 
+Using these probabilities, one can calculate the equilibrium frequencies π<sub>i</sub> of the model's states, 
 where 0 ≤ π<sub>i</sub> ≤ 1 and π<sub>1</sub> + ... + π<sub>m</sub> = 1.
+
+One can also calculate the following rates, which are useful in epidemiological parameter calculations:
+* λ<sub>i</sub> = Σ<sub>1≤j≤m</sub>λ<sub>ij</sub> -- total transmission rate from state i
+* μ<sub>i</sub> = Σ<sub>1≤j≤m;i≠j</sub>μ<sub>ij</sub> -- total state-change rate from state i
+* ε<sub>i</sub> = μ<sub>i</sub> + ψ<sub>i</sub> -- state i exit rate
 
 The MTBD model has the following epidemiological parameters:
 
-* R<sub>i</sub> = (Σ<sub>1≤j≤m</sub> λ<sub>ij</sub>)/ψ<sub>i</sub> -- reproduction number of state i
-* d<sub>i</sub> = 1/(Σ<sub>1≤j≤m;i≠j</sub>μ<sub>ij</sub> + ψ<sub>i</sub>) -- exit time from state i
+* R<sub>i</sub> = λ<sub>i</sub>/ε<sub>i</sub> + Σ<sub>1≤j≤m</sub>(μ<sub>ij</sub>/ε<sub>i</sub>)R<sub>j</sub>-- reproduction number of state i
+* t<sub>i</sub> = 1/ε<sub>i</sub> -- exit time for state i
+* d<sub>i</sub> = 1/ε<sub>i</sub> + Σ<sub>1≤j≤m</sub>(μ<sub>ij</sub>/ε<sub>i</sub>)d<sub>j</sub> -- time till the end of infection for state i
+* R = Σ<sub>1≤i≤m</sub>π<sub>i</sub>R<sub>i</sub> -- average reproduction number
+* d = Σ<sub>i ∈ recipient states</sub>(π<sub>i</sub>d<sub>i</sub>)/Σ<sub>j ∈ recipient states</sub>π<sub>j</sub> -- average infection time
 
 
 ## Contact Tracing (CT)
@@ -60,17 +68,17 @@ where the recipients are always in a non-notified state (λ<sub>i<sub>C</sub>j<s
 The removal rate for a notified state i<sub>C</sub> is φ.
 
 
-For CT models exit times from notified contact states i<sub>C</sub> is calculated as:
+For CT models exit times from notified contact states i<sub>C</sub> are calculated as:
 
-* d<sub>i<sub>C</sub></sub> = 1/(Σ<sub>1≤j≤m;i≠j</sub>μ<sub>i<sub>C</sub>j<sub>C</sub></sub> + φ)
+* t<sub>i<sub>C</sub></sub> = 1/(μ<sub>i<sub>C</sub></sub> + φ)
 
 ## Skyline
 Skyline was introduced by Stadler _et al._ [[PNAS 2013]](https://doi.org/10.1073/pnas.1207965110) 
 and extended to MTBD by Kühnert _et al._ [[MBE 2016]](https://doi.org/10.1093/molbev/msw064). 
 It enables piece-wise constant parameter value changes. 
-To use a skyline with k models, one needs to specify k-1 model change times t<sub>1</sub>, ..., <sub>k-1</sub>, 
+To use a skyline with k models, one needs to specify k-1 model change times T<sub>1</sub>, ..., T<sub>k-1</sub>, 
 and k sets of model parameters (see above).
-At time 0 the simulation starts with model 1, it switches to models 2 at time t<sub>1</sub>, etc.
+At time 0 the simulation starts with model 1, it switches to models 2 at time T<sub>1</sub>, etc.
 All the models in the Skyline must have the same states. 
 CT-related parameters can also change at skyline changing times, 
 in that case if some skyline intervals do not have CT, υ=0 and any value for φ must be specified for them. 
@@ -121,8 +129,12 @@ Epidemiological parameters:
 * ψ = ψ<sub>I</sub> -- removal rate of I
 * p = p<sub>I</sub> -- sampling probability upon removal of I
 
-BDEI-specific epidemiological parameter:
-* d<sub>E</sub> = 1/μ -- incubation period
+Epidemiological parameters:
+* R = R<sub>E</sub> = R<sub>I</sub> = λ/ψ -- reproduction number
+* t<sub>I</sub> = 1/ψ -- infectious time 
+* t<sub>E</sub> = 1/μ -- incubation period
+* d = d<sub>E</sub> = 1/μ + 1/ψ -- total infection time
+* f<sub>E</sub> = t<sub>E</sub>/d -- incubation fraction
 
 
 ## BDEI-CT(κ)
@@ -156,9 +168,11 @@ to the corresponding infectious state (becoming infectious)
 * ψ = ψ<sub>I</sub> = ψ<sub>S</sub> -- removal rate
 * p = p<sub>I</sub> = p<sub>S</sub> -- sampling probability upon removal
 
-BDSS-specific epidemiological parameters:
+Epidemiological parameters:
 * X<sub>S</sub>=λ<sub>ss</sub>/λ<sub>ns</sub>=λ<sub>sn</sub>/λ<sub>nn</sub> -- super-spreading transmission ratio
 * f<sub>S</sub>=λ<sub>ss</sub>/(λ<sub>sn</sub> + λ<sub>ss</sub>) -- super-spreading fraction
+* R = (1 - f<sub>S</sub>) λ/ψ + f<sub>S</sub> X<sub>S</sub>λ/ψ -- reproduction number
+* d = 1/ψ -- total infection time
 
 ## BDSS-CT(κ)
 4 states: 
@@ -194,10 +208,14 @@ BDSS-specific epidemiological parameters:
 * ψ = ψ<sub>I</sub> = ψ<sub>S</sub> -- removal rate of I and of S (the same)
 * p = p<sub>I</sub> = p<sub>S</sub> -- sampling probability upon removal (the same for I and S)
 
-BDEISS-specific epidemiological parameters:
+Epidemiological parameters:
 * X<sub>S</sub> = λ<sub>s</sub>/λ<sub>n</sub> -- super-spreading transmission ratio
 * f<sub>S</sub> = μ<sub>s</sub>/(μ<sub>n</sub> + μ<sub>s</sub>) -- super-spreading fraction (among infectious individuals)
-* d<sub>E</sub> = 1/(μ<sub>n</sub> + μ<sub>s</sub>) -- incubation period
+* t<sub>E</sub> = 1/(μ<sub>n</sub> + μ<sub>s</sub>) -- incubation period
+* t<sub>I</sub> = t<sub>S</sub> = 1/ψ -- infectious time
+* R = (1 - f<sub>S</sub>) λ/ψ + f<sub>S</sub> X<sub>S</sub>λ/ψ -- reproduction number
+* d = d<sub>E</sub> = 1/(μ<sub>n</sub> + μ<sub>s</sub>) + 1/ψ -- total infection time
+* f<sub>E</sub> = t<sub>E</sub>/d -- incubation fraction
 
 
 ## BDEISS-CT(κ)

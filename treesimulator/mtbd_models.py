@@ -286,18 +286,17 @@ class Model(object):
         :return: an array of state-specific average infection durations
         """
         transition_probs, removal_probs = self.__get_exit_probs()
+        exit_rates_per_state = self.transition_rates.sum(axis=1) + self.removal_rates
+        m = len(self.states)
 
-        # d_i = psi_i / e_i * 1 / psi_i + \sum_j mu_ij / e_i * (1 / mu_i_ + d_j) = 0
-        right_side_1 = np.array(removal_probs)
-        right_side_1 /= np.where(self.removal_rates > 0, self.removal_rates, 1)
-        right_side_2 = transition_probs.sum(axis=1)
-        transition_rates_per_state = self.transition_rates.sum(axis=1)
-        right_side_2 /= np.where(transition_rates_per_state > 0, transition_rates_per_state, 1)
+        # d_i = 1 / e_i + \sum_j mu_ij / e_i * d_j = 0
+        right_side = np.ones(m)
+        right_side /= np.where(exit_rates_per_state > 0, exit_rates_per_state, np.inf)
 
         left_side = -transition_probs
         left_side[np.eye(len(self.states)) == 1] += 1
 
-        return np.linalg.solve(left_side, right_side_1 + right_side_2)
+        return np.linalg.solve(left_side, right_side)
 
     def get_epidemiological_parameters(self):
         """Returns a dictionary with model-relevant parameters"""
