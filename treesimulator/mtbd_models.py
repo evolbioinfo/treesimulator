@@ -1,6 +1,7 @@
 import logging
 
 import numpy as np
+from bdeissct_dl.bdeissct_model import INCUBATION_PERIOD
 from scipy.optimize import least_squares
 import sympy
 
@@ -243,27 +244,78 @@ class Model(object):
             raise ValueError('The number of recipients cannot be below 1 '
                              '(put the transmission rate to zero to prevent transmission from a certain state)')
 
-    def get_epidemiological_parameters(self):
-        """Converts rate parameters to the epidemiological ones"""
-        pis = self.state_frequencies
+    def __get_Rs(self):
+        """
+        Returns an array of state-specific reproductive numbers.
+
+        :return: an array of state-specific reproductive numbers
+        """
+        transition_probs, removal_probs = self.__get_exit_probs()
+
+        # R_i = psi_i / e_i * la_i / psi_i * n_recipients_i + \sum_j mu_ij / e_i * R_j = 0
+        right_side = removal_probs * self.transmission_rates.sum(axis=1) * self.n_recipients
+        right_side /= np.where(self.removal_rates > 0, self.removal_rates, 1)
+
+        left_side = -transition_probs
+        left_side[np.eye(len(self.states)) == 1] += 1
+
+        return np.linalg.solve(left_side, right_side)
+
+    def __get_exit_probs(self):
+        """
+        Return the probabilities to exit the state due to state changes and removal
+
+        :return: array of probabilities
+        """
+        exit_rates_per_state = self.transition_rates.sum(axis=1) + self.removal_rates
+        m = len(self.states)
+
+        removal_probs = np.array(self.removal_rates)
+        removal_probs /= np.where(exit_rates_per_state > 0, exit_rates_per_state, 1)
+        # repeat the exit rate vector (column) as many times as there are states
+        exit_rates_tiled = np.tile(exit_rates_per_state.reshape((1, m)), (m, 1)).T
+        transition_probs = np.array(self.transition_rates)
+        transition_probs /= np.where(exit_rates_tiled > 0, exit_rates_tiled, 1)
+        return transition_probs, removal_probs
+
+    def __get_ds(self):
+        """
+        Returns an array of state-specific average infection durations
+        (how long it will take before being removed if started in the given state).
+
+        :return: an array of state-specific average infection durations
+        """
+        transition_probs, removal_probs = self.__get_exit_probs()
+
+        # d_i = psi_i / e_i * 1 / psi_i + \sum_j mu_ij / e_i * (1 / mu_i_ + d_j) = 0
+        right_side_1 = np.array(removal_probs)
+        right_side_1 /= np.where(self.removal_rates > 0, self.removal_rates, 1)
+        right_side_2 = transition_probs.sum(axis=1)
         transition_rates_per_state = self.transition_rates.sum(axis=1)
-        transmission_rates_per_state = self.transmission_rates.sum(axis=1)
-        Rs = np.ones(len(self.states), dtype=float) * np.inf
-        irremovable_mask = self.removal_rates == 0
-        Rs[~irremovable_mask] = \
-            transmission_rates_per_state[~irremovable_mask] * self.n_recipients[~irremovable_mask] \
-            / self.removal_rates[~irremovable_mask]
-        Rs[(transmission_rates_per_state == 0) & irremovable_mask] = 1
+        right_side_2 /= np.where(transition_rates_per_state > 0, transition_rates_per_state, 1)
+
+        left_side = -transition_probs
+        left_side[np.eye(len(self.states)) == 1] += 1
+
+        return np.linalg.solve(left_side, right_side_1 + right_side_2)
+
+    def get_epidemiological_parameters(self):
+        """Returns a dictionary with model-relevant parameters"""
+
+        Rs = self.__get_Rs()
+        ds = self.__get_ds()
+        exit_rates_per_state = self.transition_rates.sum(axis=1) + self.removal_rates
         res = {}
         n_states = len(self.states)
         is_mult = np.any(self.n_recipients != 1)
         for i in range(n_states):
             state_i = self.states[i]
-            if self.removal_rates[i]:
-                res[f'R_{state_i}'] = Rs[i]
-            res[f'd_{state_i}'] = 1 / (self.removal_rates[i] + transition_rates_per_state[i])
+            # if self.removal_rates[i]:
+            res[f'R_{state_i}'] = Rs[i]
+            res[f't_{state_i}'] = 1 / exit_rates_per_state[i]
+            res[f'd_{state_i}'] = ds[i]
             if n_states > 1:
-                res[f'pi_{state_i}'] = pis[i]
+                res[f'pi_{state_i}'] = self.state_frequencies[i]
             if is_mult:
                 res[f'n_recipients_{state_i}'] = self.n_recipients[i]
             for j in range(n_states):
@@ -275,11 +327,27 @@ class Model(object):
             if self.removal_rates[i]:
                 res[f'psi_{state_i}'] = self.removal_rates[i]
                 res[f'p_{state_i}'] = self.ps[i]
+        res['R'] = self.get_avg_R(Rs)
+        res['d'] = self.get_avg_d(ds)
         return res
 
     def get_avg_transmission_rate(self):
         """Average transmission rate over all states weighted by their frequencies"""
         return (self.transmission_rates.sum(axis=1) * self.state_frequencies).sum()
+
+    def get_avg_R(self, Rs=None):
+        """Average transmission rate over all states weighted by their frequencies"""
+        if Rs is None:
+            Rs = self.__get_Rs()
+        return (Rs * self.state_frequencies).sum()
+
+    def get_avg_d(self, ds=None):
+        """Average infection duration over all recipient states weighted by their relative frequencies"""
+        recipient_states = self.transmission_rates.sum(axis=0) > 0
+        if ds is None:
+            ds = self.__get_ds()
+        return (ds[recipient_states] \
+                * (self.state_frequencies[recipient_states] / self.state_frequencies[recipient_states].sum())).sum()
 
 
 class BirthDeathExposedInfectiousModel(Model):
@@ -322,13 +390,8 @@ class BirthDeathExposedInfectiousModel(Model):
     def get_epidemiological_parameters(self):
         """Converts rate parameters to the epidemiological ones"""
         result = Model.get_epidemiological_parameters(self)
-        result[INCUBATION_FRACTION] = result[f'd_{EXPOSED}'] / (result[f'd_{EXPOSED}'] + result[f'd_{INFECTIOUS}'])
+        result[INCUBATION_FRACTION] = result[f't_{EXPOSED}'] / (result[f't_{EXPOSED}'] + result[f't_{INFECTIOUS}'])
         return result
-
-    def get_avg_infection_time(self):
-        mu = self.transition_rates[0, :].sum()
-        psi = self.removal_rates[1]
-        return 1 / mu + 1 / psi
 
 
 class BirthDeathModel(Model):
@@ -344,10 +407,6 @@ class BirthDeathModel(Model):
 
     def get_name(self):
         return 'BD'
-
-    def get_avg_infection_time(self):
-        psi = self.removal_rates[0]
-        return 1 / psi
 
 
 class BirthDeathWithSuperSpreadingModel(Model):
@@ -403,10 +462,6 @@ class BirthDeathWithSuperSpreadingModel(Model):
         result[SUPERSPREADING_FRACTION] = pis[-1]
         return result
 
-    def get_avg_infection_time(self):
-        psi = self.removal_rates[0]
-        return 1 / psi
-
 
 class BirthDeathExposedInfectiousWithSuperSpreadingModel(Model):
 
@@ -444,13 +499,8 @@ class BirthDeathExposedInfectiousWithSuperSpreadingModel(Model):
         result = Model.get_epidemiological_parameters(self)
         result[SS_TRANSMISSION_RATIO] = self.transmission_rates[2, 0] / self.transmission_rates[1, 0]
         result[SUPERSPREADING_FRACTION] = pis[2] / (pis[1] + pis[2])
-        result[INCUBATION_FRACTION] = result[f'd_{EXPOSED}'] / (result[f'd_{EXPOSED}'] + result[f'd_{INFECTIOUS}'])
+        result[INCUBATION_FRACTION] = result[f't_{EXPOSED}'] / (result[f't_{EXPOSED}'] + result[f't_{INFECTIOUS}'])
         return result
-
-    def get_avg_infection_time(self):
-        mu = self.transition_rates[0, :].sum()
-        psi = self.removal_rates[1]
-        return 1 / mu + 1 / psi
 
 
 class CTModel(Model):
@@ -539,18 +589,16 @@ class CTModel(Model):
         assert (0 <= self.__upsilon <= 1)
 
     def get_epidemiological_parameters(self):
-        result = self.model.get_epidemiological_parameters()
+        result = Model.get_epidemiological_parameters(self)
         result['upsilon'] = self.upsilon
-
-        # for state_i in self.model.states:
-        #     if f'pi_{state_i}' in result:
-        #         del result[f'pi_{state_i}']
-        # for state_i, freq in zip(self.states, self.state_frequencies):
-        #     result[f'pi_{state_i}'] = freq
-
         n_contact_states = len(self.model.states)
-        for state_i, phi in zip(self.states[n_contact_states: ], self.removal_rates[n_contact_states:]):
-            result[f'phi_{state_i}'] = phi
-            if phi:
-                result[f'd_{state_i}'] = 1 / phi
+        for state_i in self.states[n_contact_states: ]:
+            result[f'phi_{state_i}'] = result[f'psi_{state_i}']
+            del result[f'psi_{state_i}']
+            del result[f'p_{state_i}']
+        for state_i in self.states[:n_contact_states]:
+            del result[f'd_{state_i}']
+            del result[f'R_{state_i}']
+        del result['R']
+        del result['d']
         return result

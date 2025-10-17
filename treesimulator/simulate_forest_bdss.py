@@ -114,17 +114,6 @@ def main():
 
     models = []
     for i in range(n_models):
-        logging.info('{}BDSS{}{} model parameters are:'
-                     '\n\tlambda_nn={}\n\tlambda_ns={}\n\tlambda_sn={}\n\tlambda_ss={}\n\tpsi={}\n\tp={}{}{}'
-                     .format('For time interval {}-{},\n'.format(0 if i == 0 else params.skyline_times[i - 1],
-                                                                 params.skyline_times[i] if i < (n_models - 1) else '...')
-                             if n_models > 1 else '',
-                             '-MULT' if is_mult else '',
-                             '-CT' if is_ct else '',
-                             params.la_nn[i], params.la_ns[i], params.la_sn[i], params.la_ss[i],
-                             params.psi[i], params.p[i],
-                             '\n\tavg_recipient_number_n={}\n\tavg_recipient_number_s={}'.format(*params.avg_recipients) if is_mult else '',
-                             '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
         model = BirthDeathWithSuperSpreadingModel(p=params.p[i],
                                                   la_nn=params.la_nn[i], la_ns=params.la_ns[i],
                                                   la_sn=params.la_sn[i], la_ss=params.la_ss[i],
@@ -133,13 +122,26 @@ def main():
             model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i],
                             allow_irremovable_states=params.allow_irremovable_states)
         models.append(model)
+        extras = f'\n\tR={model.get_avg_R():g}\n\td={model.get_avg_d():g}' if not is_ct else ''
+        logging.info('{}BDSS{}{} model parameters are:'
+                     '\n\tlambda_nn={}\n\tlambda_ns={}\n\tlambda_sn={}\n\tlambda_ss={}\n\tpsi={}\n\tp={}{}{}{}'
+                     .format('For time interval {}-{},\n'.format(0 if i == 0 else params.skyline_times[i - 1],
+                                                                 params.skyline_times[i] if i < (n_models - 1) else '...')
+                             if n_models > 1 else '',
+                             '-MULT' if is_mult else '',
+                             '-CT' if is_ct else '',
+                             params.la_nn[i], params.la_ns[i], params.la_sn[i], params.la_ss[i],
+                             params.psi[i], params.p[i],
+                             extras,
+                             '\n\tavg_recipient_number_n={}\n\tavg_recipient_number_s={}'.format(*params.avg_recipients) if is_mult else '',
+                             '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
 
     epidemic = generate(models, skyline_times=params.skyline_times, T=params.T,
                         min_tips=params.min_tips, max_tips=params.max_tips,
                         max_notified_contacts=params.max_notified_contacts,
                         random_seed=params.seed, return_LTT=params.ltt is not None,
                         return_full_forest=params.nwk_full is not None,
-                        return_stats=False)
+                        return_stats=True)
 
     save_forest(epidemic.sampled_forest, params.nwk)
     if params.nwk_full is not None:

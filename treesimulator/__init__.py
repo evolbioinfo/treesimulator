@@ -47,12 +47,14 @@ def save_log(log, models, skyline_times, epidemic):
         pi_keys = '' if len(states) <= 1  else \
             ((','.join(f'{pi}_observed' for pi in pis) if is_ct \
                   else ','.join(f'{pi},{pi}_observed' for pi in pis)) + ',')
-        f.write('{}{},{}tips,hidden_trees,end_time{}\n'\
+        f.write('{}{}{}{},{}tips,hidden_trees,end_time{}\n'\
                 .format(','.join(keys),
                         ',kappa' if is_ct else '',
+                        ',R' if not is_ct else '',
+                        ',d' if not is_ct else '',
                         pi_keys,
-                        ',avg_R_observed,avg_d_observed,zeta_observed' if epidemic.R_e is not None else ''))
-        extras = f',{epidemic.z:g},{epidemic.R_e:g},{epidemic.d:g}' if epidemic.R_e is not None else ''
+                        ',R_observed,d_observed,zeta_observed' if epidemic.R_e is not None else ''))
+        extras = f',{epidemic.R_e:g},{epidemic.d:g},{epidemic.z:g}' if epidemic.R_e is not None else ''
         extras_empty = f',,,' if epidemic.R_e is not None else ''
         u = epidemic.u
         for model, end_time, obs in zip(models, skyline_times, epidemic.pis):
@@ -61,9 +63,11 @@ def save_log(log, models, skyline_times, epidemic):
             pi_values = '' if len(states) <= 1  else \
                 ((','.join(f'{o:g}' for o in obs) if is_ct \
                       else ','.join(f'{pi:g},{o:g}' for (pi, o) in zip((params[_] for _ in pis), obs))) + ',')
-            f.write('{}{},{}{},{},{:g}{}\n'
+            f.write('{}{}{}{},{}{},{},{:g}{}\n'
                     .format(','.join(f'{params[k]:g}' for k in keys),
                             f',{epidemic.kappa:g}' if is_ct else '',
+                            f',{model.get_avg_R():g}' if not is_ct else '',
+                            f',{model.get_avg_d():g}' if not is_ct else '',
                             pi_values,
                             tips, u, end_time,
                             extras_empty if end_time < epidemic.T else extras))

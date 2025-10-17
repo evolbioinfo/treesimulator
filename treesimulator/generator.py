@@ -7,6 +7,7 @@ import scipy
 from ete3 import TreeNode
 
 from lifelines import KaplanMeierFitter
+from lifelines.utils import restricted_mean_survival_time
 
 from treesimulator import STATE, DIST_TO_START, TIME_TILL_NOW
 from treesimulator.mtbd_models import CTModel
@@ -19,19 +20,21 @@ EVENT_TYPES = np.array([TRANSITION, TRANSMISSION, REMOVAL])
 Epidemic = namedtuple('Epidemic',
                       ['sampled_forest', 'full_forest', 'LTT',
                        'n_tips', 'n_trees', 'u', 'T',
-                       'R_e', 'd', 'z', 'pis', 'kappa'],
-                      defaults=[None, None, None, np.inf, 0, 0, 0, None, None, None, None, 0])
+                       'R_e', 'd', 'z', 'p', 'pis', 'kappa'],
+                      defaults=[None, None, None,
+                                0, 0, 0, 0,
+                                None, None, None, None, None, 0])
 
 
 def extract_patient_specific_stats(id2parent_id, id2node_time, max_time):
     """
-    Extracts the patient-specific numbers of secondary infections (Re), durations of infection (d),
+    Extracts the patient-specific durations of infection (d),
     and the information on whether the patient is removed. The patient zero (root) is not considered.
 
     :param id2parent_id: dictionary mapping node ids to their parent ids
     :param id2node_time: dictionary mapping node ids to their times
     :param max_time: end of the sampling period (i.e., time T)
-    :return: three lists: patient-specific Re, their d, and a boolean list indicating whether the patient is removed.
+    :return: two lists: patient-specific infection durations, and a boolean list indicating whether the patient is removed.
     """
     # we do not add the root (id=0) as real trees might start directly with a transmission
     patient_id_set = set(nid[0] for nid in id2parent_id.keys()) - {0}
@@ -52,20 +55,13 @@ def extract_patient_specific_stats(id2parent_id, id2node_time, max_time):
         patient_infection_durations.append((id2node_time[(pid, node_suffix)] if is_removed else max_time)
                                            - infection_time)
 
-    patient_id2Re = Counter(nid[0] for nid in transmission_node_id_set)
-    patient_Res = [patient_id2Re[pid] for pid in patient_ids]
-
-    return patient_Res, patient_infection_durations, patient_removal_mask
+    return patient_infection_durations, patient_removal_mask
 
 
-def get_mean_estimate(observations, is_finished):
+def get_mean_estimate(observations, is_finished, max_time):
     kmf = KaplanMeierFitter()
     kmf.fit(durations=observations, event_observed=is_finished)
-    # For mean, we need to integrate the survival function
-    # lifelines doesn't directly give mean, so we calculate it
-    survival_function = kmf.survival_function_
-    time_points = survival_function.index
-    return np.trapezoid(survival_function.iloc[:, 0], time_points)
+    return restricted_mean_survival_time(kmf, max_time)
 
 
 def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min_sampled=0, max_sampled=np.inf,
@@ -591,7 +587,7 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
         total_observed_nums = np.zeros((len(models) if isinstance(models, list) else 1, \
                                         len((models[0] if isinstance(models, list) else models).states)),
                                        dtype=float)
-        total_patient_Res, total_patient_infection_durations, total_patient_removal_mask = [], [], []
+        total_patient_infection_durations, total_patient_removal_mask = [], []
         ltt = None
 
         while total_n_tips < min_tips:
@@ -619,9 +615,8 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
 
             total_observed_nums += observed_nums
             if return_stats:
-                patient_Res, patient_infection_durations, patient_removal_mask = \
+                patient_infection_durations, patient_removal_mask = \
                     extract_patient_specific_stats(id2parent_id, id2node_time, max_time)
-                total_patient_Res.extend(patient_Res)
                 total_patient_infection_durations.extend(patient_infection_durations)
                 total_patient_removal_mask.extend(patient_removal_mask)
 
@@ -632,18 +627,20 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
             observed_frequencies = total_observed_nums / total_observed_nums.sum(axis=1) \
                 .reshape((total_observed_nums.shape[0], 1))
             if return_stats:
-                avg_la = np.sum(total_patient_Res) / np.sum(total_patient_infection_durations)
-                avg_d = get_mean_estimate(total_patient_infection_durations, total_patient_removal_mask)
-                avg_Re = avg_la * avg_d
-
+                avg_d = get_mean_estimate(total_patient_infection_durations, total_patient_removal_mask,
+                                          T if T < np.inf else max_time)
+                avg_p = min(1, total_n_tips / np.sum(total_patient_removal_mask))
                 # add 1 as the patient removal mask does not include the root
                 zeta = total_n_tips / (len(total_patient_removal_mask) + 1)
-                msg += f' and observed parameters:\n\tRe={avg_Re:.2f}\n\td={avg_d:.2f}\n\tla={avg_la:.2f}\n\tzeta={zeta:.2f}'
+                avg_R = 1 / (zeta / avg_p)
+                msg += (f' and observed parameters:\n\tR={avg_R:.2f}\n\td={avg_d:.2f}'
+                        f'\n\tzeta={zeta:.2f}\n\tp={avg_p:.2f}')
             else:
-                avg_Re, avg_d, zeta = None, None, None
+                avg_R, avg_d, zeta, avg_p = None, None, None, None
 
             logging.info(msg)
-            epidemic = Epidemic(sampled_forest=forest, full_forest=forest_full, LTT=ltt, R_e=avg_Re, d=avg_d, z=zeta,
+            epidemic = Epidemic(sampled_forest=forest, full_forest=forest_full, LTT=ltt,
+                                R_e=avg_R, d=avg_d, z=zeta, p=avg_p,
                                 pis=observed_frequencies, n_tips=total_n_tips, n_trees=sampled_trees, u=u,
                                 T=max_time if T == np.inf else T, kappa=max_notified_contacts)
             return epidemic

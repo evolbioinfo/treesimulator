@@ -175,12 +175,23 @@ def main():
 
     models = []
     for i in range(n_models):
+        model = Model(states=params.states,
+                      transmission_rates=transmission_rates[:, :, i],
+                      transition_rates=transition_rates[:, :, i],
+                      removal_rates=removal_rates[:, i], ps=sampling_probabilities[:, i],
+                      n_recipients=params.avg_recipients)
+        if is_ct:
+            model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i],
+                            allow_irremovable_states=params.allow_irremovable_states)
+        models.append(model)
+        extras = f'\n\tR={model.get_avg_R():g}\n\td={model.get_avg_d():g}' if not is_ct else ''
         logging.info('{}MTBD{}{} model parameters are:\n'
                      '\tstates={}\n'
                      '\ttransition_rates=\n{}\n'
                      '\ttransmission_rates=\n{}\n'
                      '\tremoval_rates={}\n'
                      '\tsampling probabilities={}'
+                     '{}'
                      '{}{}'
                      .format('For time interval {}-{},\n'.format(0 if i == 0 else params.skyline_times[i - 1],
                                                                  params.skyline_times[i] if i < (
@@ -193,17 +204,9 @@ def main():
                              transmission_rates[:, :, i],
                              removal_rates[:, i],
                              sampling_probabilities[:, i],
+                             extras,
                              '\n\tavg_recipient_numbers={}'.format(params.avg_recipients) if is_mult else '',
                              '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
-        model = Model(states=params.states,
-                      transmission_rates=transmission_rates[:, :, i],
-                      transition_rates=transition_rates[:, :, i],
-                      removal_rates=removal_rates[:, i], ps=sampling_probabilities[:, i],
-                      n_recipients=params.avg_recipients)
-        if is_ct:
-            model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i],
-                            allow_irremovable_states=params.allow_irremovable_states)
-        models.append(model)
 
     epidemic = generate(models, skyline_times=params.skyline_times, T=params.T,
                         min_tips=params.min_tips, max_tips=params.max_tips,

@@ -110,15 +110,6 @@ def main():
 
     models = []
     for i in range(n_models):
-        logging.info('{}BDEI{}{} model parameters are:\n\tmu={}\n\tlambda={}\n\tpsi={}\n\tp={}{}{}'
-                     .format('For time interval {}-{},\n'.format(0 if i == 0 else params.skyline_times[i - 1],
-                                                                 params.skyline_times[i] if i < (n_models - 1) else '...')
-                             if n_models > 1 else '',
-                             '-MULT' if is_mult else '',
-                             '-CT' if is_ct else '',
-                             params.mu[i], params.la[i], params.psi[i], params.p[i],
-                             '\n\tavg_recipient_number={}'.format(params.avg_recipients) if is_mult else '',
-                             '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
         model = BirthDeathExposedInfectiousModel(p=params.p[i],
                                                  mu=params.mu[i], la=params.la[i], psi=params.psi[i],
                                                  n_recipients=[1, params.avg_recipients])
@@ -127,12 +118,24 @@ def main():
                             allow_irremovable_states=params.allow_irremovable_states)
         models.append(model)
 
+        extras = f'\n\tR={model.get_avg_R():g}\n\td={model.get_avg_d():g}' if not is_ct else ''
+        logging.info('{}BDEI{}{} model parameters are:\n\tmu={}\n\tlambda={}\n\tpsi={}\n\tp={}{}{}{}'
+                     .format('For time interval {}-{},\n'.format(0 if i == 0 else params.skyline_times[i - 1],
+                                                                 params.skyline_times[i] if i < (n_models - 1) else '...')
+                             if n_models > 1 else '',
+                             '-MULT' if is_mult else '',
+                             '-CT' if is_ct else '',
+                             params.mu[i], params.la[i], params.psi[i], params.p[i],
+                             extras,
+                             '\n\tavg_recipient_number={}'.format(params.avg_recipients) if is_mult else '',
+                             '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
+
     epidemic = generate(models, skyline_times=params.skyline_times, T=params.T,
                         min_tips=params.min_tips, max_tips=params.max_tips,
                         max_notified_contacts=params.max_notified_contacts,
                         random_seed=params.seed, return_LTT=params.ltt is not None,
                         return_full_forest=params.nwk_full is not None,
-                        return_stats=False)
+                        return_stats=True)
 
     save_forest(epidemic.sampled_forest, params.nwk)
     if params.nwk_full is not None:
