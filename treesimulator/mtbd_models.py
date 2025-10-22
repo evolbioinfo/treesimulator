@@ -1,7 +1,6 @@
 import logging
 
 import numpy as np
-from bdeissct_dl.bdeissct_model import INCUBATION_PERIOD
 from scipy.optimize import least_squares
 import sympy
 
