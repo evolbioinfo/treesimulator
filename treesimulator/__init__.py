@@ -38,7 +38,7 @@ def save_log(log, models, skyline_times, epidemic):
     skyline_times = [_ for _ in skyline_times if _ <= epidemic.T]
     skyline_times += [epidemic.T]
     is_ct = isinstance(models[0], CTModel)
-    with (open(log, 'w+') as f):
+    with open(log, 'w+') as f:
         states = models[0].states
         pis = [f'pi_{s}' for s in states]
         keys = sorted([k for k in models[0].get_epidemiological_parameters().keys() if k not in set(pis)],
