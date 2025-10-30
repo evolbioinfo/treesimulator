@@ -1,4 +1,4 @@
-FROM evolbioinfo/python:v3.6.9
+FROM evolbioinfo/python:v3.8.2
 
 # Switch to your new user in the docker image
 USER root
@@ -7,7 +7,7 @@ USER root
 RUN apt-get update -y && apt-get install -y bc
 
 # Install treesimulator
-RUN cd /usr/local/ && pip3 install --no-cache-dir treesimulator==0.2.23
+RUN cd /usr/local/ && pip3 install --no-cache-dir treesimulator==0.2.24
 
 # Switch to your new user in the docker image
 USER evolbioinfo

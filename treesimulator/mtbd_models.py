@@ -591,9 +591,10 @@ class CTModel(Model):
         result['upsilon'] = self.upsilon
         n_contact_states = len(self.model.states)
         for state_i in self.states[n_contact_states: ]:
-            result[f'phi_{state_i}'] = result[f'psi_{state_i}']
-            del result[f'psi_{state_i}']
-            del result[f'p_{state_i}']
+            if f'psi_{state_i}' in result:
+                result[f'phi_{state_i}'] = result[f'psi_{state_i}']
+                del result[f'psi_{state_i}']
+                del result[f'p_{state_i}']
         for state_i in self.states[:n_contact_states]:
             del result[f'd_{state_i}']
             del result[f'R_{state_i}']
