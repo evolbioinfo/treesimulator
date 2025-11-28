@@ -52,14 +52,18 @@ def main():
     # Contact tracing parameters
     parser.add_argument('--upsilon', nargs='*', type=float,
                         help='List of notification probabilities (one per skyline interval). Omit for no contact tracing.')
-    parser.add_argument('--phi', nargs='*', type=float,
-                        help='List of notified removal rates (one per skyline interval). Only used if upsilon is specified.')
+    parser.add_argument('--X_C', nargs='*', type=float,
+                        help='List of removal rate speed-ups (X_C times) after being notified, '
+                             'where X_C = 1 means no speed-up. One value per skyline interval should be given. '
+                             'Only used if upsilon is specified.')
+    parser.add_argument('--X_p', nargs='*', type=float,
+                        help='List of sampling probability increases (X_p times) after being notified '
+                             '(X_p = 1 means no increase, X_p >= 1 / p '
+                             'means automatic sampling (with probability 1) upon removal.) '
+                             'One value per skyline interval should be given. '
+                             'Only used if upsilon is specified.')
     parser.add_argument('--max_notified_contacts', required=False, default=1, type=int,
                         help='Maximum notified contacts')
-    parser.add_argument('--allow_irremovable_states', action='store_true', default=False,
-                        help='If specified and the initial model had a zero removal rate (psi=0), '
-                             'then even after notification the removal rate will stay zero (phi=0) '
-                             'and the given value of phi ignored.')
 
     parser.add_argument('--avg_recipients', required=False, default=1, type=float,
                         help='average number of recipients per transmission. '
@@ -85,7 +89,7 @@ def main():
         raise ValueError("All parameter lists (la, psi, p) must have the same length")
     is_ct = params.upsilon
     if is_ct:
-        if n_models != len(params.upsilon) or n_models != len(params.phi):
+        if n_models != len(params.upsilon) or n_models != len(params.X_C) or n_models != len(params.X_p):
             raise ValueError("Contact-tracing parameter lists must have the same length "
                              "as the other parameter lists (la, psi, p)")
 
@@ -102,8 +106,7 @@ def main():
     for i in range(n_models):
         model = BirthDeathModel(p=params.p[i], la=params.la[i], psi=params.psi[i], n_recipients=[params.avg_recipients])
         if is_ct:
-            model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i],
-                            allow_irremovable_states=params.allow_irremovable_states)
+            model = CTModel(model=model, upsilon=params.upsilon[i], X_C=params.X_C[i], X_p=params.X_p[i])
         models.append(model)
         extras = f'\n\tR={model.get_avg_R():g}\n\td={model.get_avg_d():g}' if not is_ct else ''
         logging.info('{}BD{}{} model parameters are:\n\tlambda={}\n\tpsi={}\n\tp={}{}{}{}'
@@ -115,7 +118,7 @@ def main():
                              params.la[i], params.psi[i], params.p[i],
                              extras,
                              '\n\tavg_recipient_number={}'.format(params.avg_recipients) if is_mult else '',
-                             '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
+                             '\n\tX_C={}\n\tupsilon={}\n\tX_p={}'.format(params.X_C[i], params.upsilon[i], params.X_p[i]) if is_ct else ''))
 
     epidemic = generate(models, skyline_times=params.skyline_times, T=params.T,
                         min_tips=params.min_tips, max_tips=params.max_tips,

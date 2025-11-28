@@ -503,23 +503,26 @@ class BirthDeathExposedInfectiousWithSuperSpreadingModel(Model):
 
 class CTModel(Model):
     """
-    Contact-tracing model adds two parameters:
+    Contact-tracing model adds three parameters:
         * upsilon -- the probability to notify a contact upon sampling
-        * phi -- the removal rate after being notified
+        * X_C -- the removal rate speed-up (X_C times) after being notified, where X_C = 1 means no speed-up,
+        * X_p -- the sampling probability increase (X_p times) after being notified
+            (X_p = 1 means no increase, X_p >= 1 / p (default),
+            where p is the sampling probability of the unnotified individual of the same type,
+            means automatic sampling (with probability 1) upon removal.)
     """
 
-    def __init__(self, model, phi=np.inf, upsilon=0.5, allow_irremovable_states=False,
+    def __init__(self, model, X_C=10, upsilon=0.5, X_p=np.inf,
                  state_frequencies=None, *args, **kwargs):
         """
         
         :param model: initial model, whose states will now be contact-traced
-        :param phi: sampling rate after being notified
-        :param upsilon: probability to notify a contact upon sampling
-        :param allow_irremovable_states: if set to True and the initial model included "irremovable" states
-            (i.e., whose removal rate was zero, e.g., E in the BDEI model), then even after notification 
-            their removal rate will stay zero, and the corresponding individuals will become "removable" (at a rate phi)
-            only once they change the state to a "removable" one (e.g., from E-notified to I-notified in BDEI-CT).
-            By default, allow_irremovable_states is False and all states become "removable" once notified.
+        :param X_C: removal rate speed-up (X_C times) after being notified, where X_C = 1 means no speed-up,
+        :param upsilon: probability to notify a contact upon sampling,
+        :param X_p: sampling probability increase (X_p times) after being notified
+            (X_p = 1 means no increase, X_p >= 1 / p (default),
+            where p is the sampling probability of the unnotified individual of the same type,
+            means automatic sampling (with probability 1) upon removal.)
         :param args: 
         :param kwargs: 
         """
@@ -534,17 +537,10 @@ class CTModel(Model):
         transmission_rates[model.transmission_rates.shape[0]:, :model.transmission_rates.shape[1]] \
             = model.transmission_rates
 
-        n_removal_rates = model.removal_rates.shape[0]
-        removal_rates = np.pad(model.removal_rates, (0, n_removal_rates), mode='constant', constant_values=phi)
-        rhos = np.pad(model.ps, (0, model.ps.shape[0]), mode='constant', constant_values=1)
-        if allow_irremovable_states:
-            # If there was no way to remove a certain state (e.g. E in BDEI),
-            # then notification should not change its "irremovable" status
-            mask = np.zeros(2 * n_removal_rates, dtype=bool)
-            mask[n_removal_rates:] = (model.removal_rates == 0)
-            removal_rates[mask] = 0
-            rhos[mask] = 0
-        self.__irremovable_states = allow_irremovable_states
+        # make sure that if X_C or X_p is infinite but one of the rates/probs is zero
+        # then the contact-version stays zero
+        removal_rates = np.concatenate([model.removal_rates, np.where(model.removal_rates > 0, X_C * model.removal_rates, 0)])
+        rhos = np.concatenate([model.ps, np.where(model.ps > 0, np.minimum(X_p * model.ps, 1), 0)])
 
         pis = None
         if state_frequencies is not None:
@@ -564,21 +560,23 @@ class CTModel(Model):
                        state_frequencies=pis,
                        *args, **kwargs)
         self.__upsilon = upsilon
-        self.__phi = phi
         self.check_upsilon()
         self.model = model
 
     def clone(self):
-        return CTModel(model=self.model, phi=self.__phi, upsilon=self.__upsilon,
-                       allow_irremovable_states=self.__irremovable_states)
+        n = len(self.model.states)
+        i = next((k for k in range(n) if self.model.removal_rates[k] > 0), -1)
+        ps = np.array(self.model.ps)
+        ps[ps == 0] = 1
+        j = np.argmin(ps)
+        return CTModel(model=self.model,
+                       X_C=10 if i == -1 else self.removal_rates[n + i] / self.removal_rates[i],
+                       upsilon=self.__upsilon,
+                       X_p=self.ps[n + j] / self.ps[j])
 
     @property
     def upsilon(self):
         return self.__upsilon
-
-    @property
-    def phi(self):
-        return self.__phi
 
     def get_name(self):
         return self.model.get_name() + '-CT'
@@ -590,11 +588,6 @@ class CTModel(Model):
         result = Model.get_epidemiological_parameters(self)
         result['upsilon'] = self.upsilon
         n_contact_states = len(self.model.states)
-        for state_i in self.states[n_contact_states: ]:
-            if f'psi_{state_i}' in result:
-                result[f'phi_{state_i}'] = result[f'psi_{state_i}']
-                del result[f'psi_{state_i}']
-                del result[f'p_{state_i}']
         for state_i in self.states[:n_contact_states]:
             del result[f'd_{state_i}']
             del result[f'R_{state_i}']

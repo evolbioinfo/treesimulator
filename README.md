@@ -52,25 +52,32 @@ The MTBD model has the following epidemiological parameters:
 
 ## Contact Tracing (CT)
 Contact tracing extension was introduced by Zhukova & Gascuel [[_PLOS Comput Biol_ 2025]](https://doi.org/10.1371/journal.pcbi.1012461). 
-It adds two parameters to the initial MTBD model:
+Here we present a slightly modified version of it. CT adds three parameters to the initial MTBD model:
 
 * υ -- probability to notify contacts upon sampling
-* φ -- notified contact removal and sampling rate: φ >> ψ<sub>i</sub> ∀i (1 ≤ i ≤ m). The pathogen of a notified contact is sampled automatically (with a probability of 1) upon removal.
+* X<sub>C</sub> -- notified removal speeed-up: X<sub>C</sub> >> 1. 
+Once notified, the contact's removal rate increases X<sub>C</sub> times. 
+* X<sub>p</sub> -- notified sampling probability speeed-up: X<sub>p</sub> >> 1. 
+Once notified and removed, the contact's pathogen's sampling probability increases up to X<sub>p</sub> times (capped at 1). 
+X<sub>p</sub> = 1 corresponds to no increase, 
+while X<sub>p</sub> ≥ 1/p (where p is the original sampling probability) corresponds to automatic sampling upon removal.
 
-and a meta-parameter κ, which defines how many most recent contacts can be notified by each index case. Each is notified independently, with the probability υ.
+CT also adds a meta-parameter κ, which defines how many most recent contacts can be notified by each index case. Each is notified independently, with the probability υ.
 
 CT extension adds m notified contact states (1<sub>C</sub>, ..., m<sub>C</sub>) to its original MTBD model, 
 where i<sub>C</sub> is a notified version of the state i.
+
 Transition rates for a notified state i<sub>C</sub> are analogous to those of i (μ<sub>i<sub>C</sub>j<sub>C</sub></sub>=μ<sub>ij</sub>), 
 while transitions from non-notified states to notified ones and vice versa are not allowed (μ<sub>i<sub>C</sub>j</sub>=μ<sub>ji<sub>C</sub></sub>=0).
+
 Transmission rates for a notified state i<sub>C</sub> are the same as those of i (λ<sub>i<sub>C</sub>j</sub>=λ<sub>ij</sub>), 
 where the recipients are always in a non-notified state (λ<sub>i<sub>C</sub>j<sub>C</sub></sub>=λ<sub>ij<sub>C</sub></sub>=0).
-The removal rate for a notified state i<sub>C</sub> is φ.
 
+The removal rates for notified states are X<sub>C</sub> times higher than those of the corresponding non-notified states:
+ψ<sub>i<sub>C</sub></sub> = X<sub>C</sub>ψ<sub>i</sub>.
 
-For CT models exit times from notified contact states i<sub>C</sub> are calculated as:
-
-* t<sub>i<sub>C</sub></sub> = 1/(μ<sub>i<sub>C</sub></sub> + φ)
+The sampling probabilities for notified states are X<sub>p</sub> times higher (but are ≤ 1) than those of the corresponding non-notified states:
+p<sub>i<sub>C</sub></sub> = X<sub>p</sub>p<sub>i</sub>.
 
 ## Skyline
 Skyline was introduced by Stadler _et al._ [[PNAS 2013]](https://doi.org/10.1073/pnas.1207965110) 
@@ -81,7 +88,7 @@ and k sets of model parameters (see above).
 At time 0 the simulation starts with model 1, it switches to models 2 at time T<sub>1</sub>, etc.
 All the models in the Skyline must have the same states. 
 CT-related parameters can also change at skyline changing times, 
-in that case if some skyline intervals do not have CT, υ=0 and any value for φ must be specified for them. 
+in that case if some skyline intervals do not have CT, υ=0 and any values for X<sub>C</sub> and X<sub>p</sub> must be specified for them. 
 The same κ value is shared among all the skyline -CT models.
 
 
@@ -110,12 +117,13 @@ Epidemiological parameters:
 * I, infectious
 * I<sub>C</sub>, notified infectious contact
 
-5 parameters:
+6 parameters:
 * λ = λ<sub>I</sub> = λ<sub>I<sub>C</sub></sub> -- transmission rate
 * ψ = ψ<sub>I</sub> -- removal rate of I
 * p = p<sub>I</sub> -- sampling probability upon removal of I
 * υ -- probability to notify contacts upon sampling
-* φ -- notified contact removal and sampling rate of I<sub>C</sub>: φ >> ψ 
+* X<sub>C</sub> -- notified removal speed-up: X<sub>C</sub> >> 1
+* X<sub>p</sub> -- notified sampling probability speed-up: X<sub>p</sub> ≥ 1
 
 
 ## BDEI
@@ -144,14 +152,15 @@ Epidemiological parameters:
 * E<sub>C</sub>, notified exposed contact
 * I<sub>C</sub>, notified infectious contact
 
-6 parameters:
+7 parameters:
 * μ = μ<sub>EI</sub> = μ<sub>E<sub>C</sub>I<sub>C</sub></sub>-- transition rate from an exposed state (notified or not) 
 to the corresponding infectious state (becoming infectious)
 * λ = λ<sub>IE</sub> = λ<sub>I<sub>C</sub>E</sub> -- transmission rate from an infectious state (notified or not) to E
 * ψ = ψ<sub>I</sub> -- removal rate of I
 * p = p<sub>I</sub> -- sampling probability upon removal
 * υ -- probability to notify contacts upon sampling
-* φ -- notified contact removal and sampling rate: φ >> ψ 
+* X<sub>C</sub> -- notified removal speed-up: X<sub>C</sub> >> 1
+* X<sub>p</sub> -- notified sampling probability speed-up: X<sub>p</sub> ≥ 1
 
 ## BDSS
 2 states: 
@@ -181,7 +190,7 @@ Epidemiological parameters:
 * I<sub>C</sub>, notified normal spreader
 * S<sub>C</sub>, notified superspreader
 
-7(+1) parameters:
+8(+1) parameters:
 * λ<sub>nn</sub> = λ<sub>II</sub> = λ<sub>I<sub>C</sub>I</sub> -- transmission rate from a normal spreader (notified or not) to I
 * λ<sub>ns</sub> = λ<sub>IS</sub> = λ<sub>I<sub>C</sub>S</sub> -- transmission rate from a normal spreader (notified or not) to S
 * λ<sub>sn</sub> = λ<sub>SI</sub> = λ<sub>S<sub>C</sub>I</sub> -- transmission rate from a superspreader (notified or not) to I
@@ -191,7 +200,8 @@ Epidemiological parameters:
 * ψ = ψ<sub>I</sub> = ψ<sub>S</sub> -- removal rate of a non-notified state
 * p = p<sub>I</sub> = p<sub>S</sub> -- sampling probability upon removal of a non-notified state
 * υ -- probability to notify contacts upon sampling
-* φ -- notified contact removal and sampling rate: φ >> ψ 
+* X<sub>C</sub> -- notified removal speed-up: X<sub>C</sub> >> 1
+* X<sub>p</sub> -- notified sampling probability speed-up: X<sub>p</sub> ≥ 1
 
 
 ## BDEISS
@@ -227,7 +237,7 @@ Epidemiological parameters:
 * I<sub>C</sub>, notified normal spreader
 * S<sub>C</sub>, notified superspreader
 
-8 parameters:
+9 parameters:
 * μ<sub>n</sub> = μ<sub>EI</sub> = μ<sub>E<sub>C</sub>I<sub>C</sub></sub> -- transition rate from an exposed state (notified or not) to the corresponding normal infectious state (becoming infectious for normal spreaders)
 * μ<sub>s</sub> = μ<sub>ES</sub> = μ<sub>E<sub>C</sub>S<sub>C</sub></sub> -- transition rate from an exposed state (notified or not) to the corresponding superspreader infectious state (becoming infectious for superspreaders)
 * λ<sub>n</sub> = λ<sub>IE</sub> = λ<sub>I<sub>C</sub>E</sub> -- transmission rate from I or I<sub>C</sub> to E
@@ -235,7 +245,8 @@ Epidemiological parameters:
 * ψ = ψ<sub>I</sub> = ψ<sub>S</sub> -- removal rate of I and of S (the same)
 * p = p<sub>I</sub> = p<sub>S</sub> -- sampling probability upon removal of I or S
 * υ -- probability to notify contacts upon sampling
-* φ -- notified contact removal and sampling rate: φ >> ψ 
+* X<sub>C</sub> -- notified removal speed-up: X<sub>C</sub> >> 1
+* X<sub>p</sub> -- notified sampling probability speed-up: X<sub>p</sub> ≥ 1
 
 
 ## Installation
@@ -284,24 +295,25 @@ generate_bd --min_tips 200 --max_tips 500 \
 --la 0.5 --psi 0.25 --p 0.5 \
 --nwk tree.nwk --log params.csv
 ```
-The following command simulates a tree with 200-500 tips under the BD-CT(1) model, with λ=0.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
+The following command simulates a tree with 200-500 tips under the BD-CT(1) model, with λ=0.5, ψ=0.25, p=0.5, 
+υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1, 
 and allowing to notify only the most recent contact of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bd --min_tips 200 --max_tips 500 \
 --la 0.5 --psi 0.25 --p 0.5 \
---phi 2.5 --upsilon 0.2 --max_notified_contacts 1 \
+--X_C 10 --upsilon 0.2 --X_p 1 --max_notified_contacts 1 \
 --nwk tree.nwk --log params.csv
 ```
 The following command simulates a tree with 200-500 tips under the BD-CT(1)-Skyline model with two time intervals, 
-with λ=0.5, ψ=0.25, p=0.5, φ=2.5, υ=0 between t=0 and t=3,
-and λ=1, ψ=0.25, p=0.75, φ=2.5, υ=0.2 starting at t=3,
+with λ=0.5, ψ=0.25, p=0.5, υ=0, X<sub>C</sub>=10, X<sub>p</sub>=1 between t=0 and t=3,
+and λ=1, ψ=0.25, p=0.75, υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1 starting at t=3,
 and allowing to notify only the most recent contact of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bd --min_tips 200 --max_tips 500 \
 --la 0.5 1 --psi 0.25 0.25 --p 0.5 0.75 \
---phi 2.5 2.5 --upsilon 0 0.2 --max_notified_contacts 1 \
+--X_C 10 10 --upsilon 0 0.2 --X_p 1 1 --max_notified_contacts 1 \
 --skyline_times 3 \
 --nwk tree.nwk --log params.csv
 ```
@@ -320,25 +332,25 @@ generate_bdei --min_tips 200 --max_tips 500 \
 --nwk tree.nwk --log params.csv
 ```
 The following command simulates a tree with 200-500 tips under the BDEI-CT(2) model, 
-with μ=1, λ=0.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
+with μ=1, λ=0.5, ψ=0.25, p=0.5, υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1, 
 and allowing to notify last two contacts of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bdei --min_tips 200 --max_tips 500 \
 --mu 1 --la 0.5 --psi 0.25 --p 0.5 \
---phi 2.5 --upsilon 0.2 --max_notified_contacts 2 \
+--X_C 10 --upsilon 0.2 --X_p 1 --max_notified_contacts 2 \
 --nwk tree.nwk --log params.csv
 ```
 The following command simulates a tree with 200-500 tips under the BDEI-CT(2)-Skyline model with three time intervals, 
-with μ=1, λ=0.5, ψ=0.25, p=0.2, φ=2.5, υ=0.2, between t=0 and t=2,
-with μ=1, λ=0.5, ψ=0.3, p=0.3, φ=2.5, υ=0.3, between t=2 and t=3,
-and μ=1, λ=0.5, ψ=0.5, p=0.5, φ=5, υ=0.3 starting at t=3,
+with μ=1, λ=0.5, ψ=0.25, p=0.2, υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1, between t=0 and t=2,
+with μ=1, λ=0.5, ψ=0.3, p=0.3, υ=0.3, X<sub>C</sub>=10, X<sub>p</sub>=1, between t=2 and t=3,
+and μ=1, λ=0.5, ψ=0.5, p=0.5, υ=0.3, X<sub>C</sub>=20, X<sub>p</sub>=1 starting at t=3,
 and allowing to notify last two contacts of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bdei --min_tips 200 --max_tips 500 \
 --mu 1 1 1 --la 0.5 0.5 0.5 --psi 0.25 0.3 0.5 --p 0.2 0.3 0.5 \
---phi 2.5 2.5 5 --upsilon 0.2 0.3 0.3 --max_notified_contacts 2 \
+--X_C 10 10 20 --upsilon 0.2 0.3 0.3 --X_p 1 1 1 --max_notified_contacts 2 \
 --skyline_times 2 3 \
 --nwk tree.nwk --log params.csv
 ```
@@ -359,26 +371,27 @@ generate_bdss --min_tips 200 --max_tips 500 \
 --nwk tree.nwk --log params.csv
 ```
 The following command simulates a tree with 200-500 tips under the BDSS-CT(3) model, 
-with λ<sub>nn</sub>=0.1, λ<sub>ns</sub>=0.3, λ<sub>sn</sub>=0.5, λ<sub>ss</sub>=1.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
+with λ<sub>nn</sub>=0.1, λ<sub>ns</sub>=0.3, λ<sub>sn</sub>=0.5, λ<sub>ss</sub>=1.5, ψ=0.25, p=0.5, 
+υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1, 
 and allowing to notify last three contacts of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bdss --min_tips 200 --max_tips 500 \
 --la_nn 0.1 --la_ns 0.3 --la_sn 0.5 --la_ss 1.5 --psi 0.25 --p 0.5 \
---phi 2.5 --upsilon 0.2 --max_notified_contacts 3 \
+--X_C 10 --upsilon 0.2 --X_p 1 --max_notified_contacts 3 \
 --nwk tree.nwk --log params.csv
 ```
 The following command simulates a tree with 200-500 tips under the BDSS-CT(3)-Skyline model with two time intervals, 
 with λ<sub>nn</sub>=0.1, λ<sub>ns</sub>=0.3, λ<sub>sn</sub>=0.5, λ<sub>ss</sub>=1.5, 
-ψ=0.25, p=0.5, φ=2.5, υ=0.2 between t=0 and t=2,
+ψ=0.25, p=0.5, υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1 between t=0 and t=2,
 and λ<sub>nn</sub>=0.1, λ<sub>ns</sub>=0.3, λ<sub>sn</sub>=1, λ<sub>ss</sub>=3, 
-ψ=0.25, p=0.5, φ=5, υ=0.5 starting at t=2, 
+ψ=0.25, p=0.5, υ=0.5, X<sub>C</sub>=20, X<sub>p</sub>=1 starting at t=2, 
 and allowing to notify last three contacts of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bdss --min_tips 200 --max_tips 500 \
 --la_nn 0.1 0.1 --la_ns 0.3 0.3 --la_sn 0.5 1 --la_ss 1.5 3 --psi 0.25 0.25 --p 0.5 0.5 \
---phi 2.5 5 --upsilon 0.2 0.5 --max_notified_contacts 3 \
+--X_C 10 20 --upsilon 0.2 0.5 --X_p 1 1 --max_notified_contacts 3 \
 --skyline_times 2 \
 --nwk tree.nwk --log params.csv
 ```
@@ -398,26 +411,29 @@ generate_bdeiss --min_tips 200 --max_tips 500 \
 --nwk tree.nwk --log params.csv
 ```
 The following command simulates a tree with 200-500 tips under the BDEISS-CT(1) model, 
-with μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2, 
+with μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.5, 
+υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1, 
 and allowing to notify the last contact of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bdeiss --min_tips 200 --max_tips 500 \
 --mu_n 0.1 --mu_s 0.3 --la_n 0.5 --la_s 1.5 --psi 0.25 --p 0.5 \
---phi 2.5 --upsilon 0.2 --max_notified_contacts 1 \
+--X_C 10 --upsilon 0.2 --X_p 1 --max_notified_contacts 1 \
 --nwk tree.nwk --log params.csv
 ```
 The following command simulates a tree with 200-500 tips under the BDSS-CT(1)-Skyline model with two time intervals, 
-with μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.5, φ=2.5, υ=0.2
+with μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.5, 
+υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1
 between t=0 and t=2,
-and μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.2, φ=2.5, υ=0.5
+and μ<sub>n</sub>=0.1, μ<sub>s</sub>=0.3, λ<sub>n</sub>=0.5, λ<sub>s</sub>=1.5, ψ=0.25, p=0.2, 
+υ=0.5, X<sub>C</sub>=10, X<sub>p</sub>=1
 starting at t=2, 
 and allowing to notify the last contact of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
 generate_bdeiss --min_tips 200 --max_tips 500 \
 --mu_n 0.1 0.1 --mu_s 0.3 0.3 --la_n 0.5 0.5 --la_s 1.5 1.5 --psi 0.25 0.25 --p 0.5 0.2 \
---phi 2.5 2.5 --upsilon 0.2 0.5 --max_notified_contacts 1 \
+--X_C 10 10 --upsilon 0.2 0.5 --X_p 1 1 --max_notified_contacts 1 \
 --skyline_times 2 \
 --nwk tree.nwk --log params.csv
 ```
@@ -448,7 +464,7 @@ with μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7,
 λ<sub>aa</sub>=0.1, λ<sub>ab</sub>=0.2, λ<sub>ba</sub>=0.3, λ<sub>bb</sub>=0.4, 
 ψ<sub>a</sub>=0.05, ψ<sub>b</sub>=0.08,
 p=<sub>a</sub>0.15, p=<sub>b</sub>0.65,
-φ=2.5, υ=0.2, 
+υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1, 
 and allowing to notify only the most recent contact of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
@@ -458,7 +474,7 @@ generate_mtbd --min_tips 200 --max_tips 500 \
 --transmission_rates 0.1 0.2 0.3 0.4 \
 --removal_rates 0.05 0.08 \
 --sampling_probabilities 0.15 0.65 \
---phi 2.5 --upsilon 0.2 --max_notified_contacts 1 \
+--X_C 10 --upsilon 0.2 --X_p 1 --max_notified_contacts 1 \
 --nwk tree.nwk --log params.csv
 ```
 The following command simulates a tree with 200-500 tips under a generic MTBD-CT(1)-Skyline model, 
@@ -467,12 +483,12 @@ with μ<sub>ab</sub>=0.6, μ<sub>ba</sub>=0.7,
 λ<sub>aa</sub>=0.1, λ<sub>ab</sub>=0.2, λ<sub>ba</sub>=0.3, λ<sub>bb</sub>=0.4, 
 ψ<sub>a</sub>=0.05, ψ<sub>b</sub>=0.08,
 p=<sub>a</sub>0.15, p=<sub>b</sub>0.65,
-φ=2.5, υ=0.2  between t=0 and t=8,
+υ=0.2, X<sub>C</sub>=10, X<sub>p</sub>=1  between t=0 and t=8,
 and μ<sub>ab</sub>=1.6, μ<sub>ba</sub>=1.7, 
 λ<sub>aa</sub>=1.1, λ<sub>ab</sub>=1.2, λ<sub>ba</sub>=1.3, λ<sub>bb</sub>=1.4, 
 ψ<sub>a</sub>=1.05, ψ<sub>b</sub>=1.08,
 p=<sub>a</sub>0.1, p=<sub>b</sub>0.6,
-φ=3.5, υ=0.4 starting at t=8,
+υ=0.4, X<sub>C</sub>=20, X<sub>p</sub>=1 starting at t=8,
 and allowing to notify only the most recent contact of each sampled index case. 
 The simulated tree is saved to the file tree.nwk, while the model parameters are saved to the comma-separated file params.csv:
 ```bash
@@ -482,7 +498,7 @@ generate_mtbd --min_tips 200 --max_tips 500 \
 --transmission_rates 0.1 0.2 0.3 0.4 1.1 1.2 1.3 1.4 \
 --removal_rates 0.05 0.08 1.05 1.08 \
 --sampling_probabilities 0.15 0.65 0.1 0.6 \
---phi 2.5 3.5 --upsilon 0.2 0.4 --max_notified_contacts 1 \
+--X_C 10 20 --upsilon 0.2 0.4 --X_p 1 1 --max_notified_contacts 1 \
 --skyline_times 8 \
 --nwk tree.nwk --log params.csv
 ```
@@ -507,14 +523,14 @@ bd_model = BirthDeathModel(p=0.5, la=0.5, psi=0.25)
 bd_tree = generate([bd_model], min_tips=200, max_tips=500).sampled_forest[0]
 save_forest([bd_tree], 'BD_tree.nwk')
 ## Adding -CT to the model above
-bdct_model = CTModel(model=bd_model, upsilon=0.2, phi=2.5)
+bdct_model = CTModel(model=bd_model, upsilon=0.2, X_C=10, X_p=1)
 bdct_tree = generate([bdct_model], min_tips=200, max_tips=500, max_notified_contacts=1).sampled_forest[0]
 save_forest([bdct_tree], 'BDCT_tree.nwk')
 ## BD-CT(1)-Skyline models
 bdct_model_1 = CTModel(BirthDeathModel(p=0.5, la=0.5, psi=0.25),
-                       upsilon=0, phi=2.5)
+                       upsilon=0, X_C=10, X_p=1)
 bdct_model_2 = CTModel(BirthDeathModel(p=0.75, la=1, psi=0.25),
-                       upsilon=0.2, phi=2.5)
+                       upsilon=0.2, X_C=10, X_p=1)
 bdct_skyline_tree = generate([bdct_model_1, bdct_model_2], skyline_times=[3],
                              min_tips=200, max_tips=500, max_notified_contacts=1).sampled_forest[0]
 save_forest([bdct_skyline_tree], 'BDCTSkyline_tree.nwk')
@@ -522,17 +538,20 @@ save_forest([bdct_skyline_tree], 'BDCTSkyline_tree.nwk')
 # BDEI, BDEI-CT(2) and BDEI-CT(2)-Skyline
 ## BDEI model
 bdei_model = BirthDeathExposedInfectiousModel(p=0.5, mu=1, la=0.5, psi=0.25)
+print(bdei_model.get_epidemiological_parameters())
 bdei_tree = generate([bdei_model], min_tips=200, max_tips=500).sampled_forest[0]
 save_forest([bdei_tree], 'BDEI_tree.nwk')
 ## Adding -CT to the model above
-bdeict_model = CTModel(model=bdei_model, upsilon=0.2, phi=2.5)
+bdeict_model = CTModel(model=bdei_model, upsilon=0.2, X_C=10, X_p=1)
 bdeict_tree = generate([bdeict_model], min_tips=200, max_tips=500, max_notified_contacts=2).sampled_forest[0]
 save_forest([bdeict_tree], 'BDEICT_tree.nwk')
 ## BDEI-CT(2)-Skyline with three time intervals
-bdeict_model_1 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.2, mu=1, la=0.5, psi=0.25), upsilon=0.2,
-                         phi=2.5)
-bdeict_model_2 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.3, mu=1, la=0.5, psi=0.3), upsilon=0.3, phi=2.5)
-bdeict_model_3 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.5, mu=1, la=0.5, psi=0.5), upsilon=0.3, phi=5)
+bdeict_model_1 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.2, mu=1, la=0.5, psi=0.25),
+                         upsilon=0.2, X_C=10, X_p=1)
+bdeict_model_2 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.3, mu=1, la=0.5, psi=0.3),
+                         upsilon=0.3, X_C=10, X_p=1)
+bdeict_model_3 = CTModel(model=BirthDeathExposedInfectiousModel(p=0.5, mu=1, la=0.5, psi=0.5),
+                         upsilon=0.3, X_C=20, X_p=1)
 bdeict_skyline_tree = generate([bdeict_model_1, bdeict_model_2, bdeict_model_3], skyline_times=[2, 3],
                                min_tips=200, max_tips=500, max_notified_contacts=2).sampled_forest[0]
 save_forest([bdeict_skyline_tree], 'BDEICTSkyline_tree.nwk')
@@ -540,16 +559,17 @@ save_forest([bdeict_skyline_tree], 'BDEICTSkyline_tree.nwk')
 # BDSS, BDSS-CT(3) and BDSS-CT(3)-Skyline
 ## BDSS model
 bdss_model = BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.1, la_ns=0.3, la_sn=0.5, la_ss=1.5, psi=0.25)
+print(bdss_model.get_epidemiological_parameters())
 bdss_tree = generate([bdss_model], min_tips=200, max_tips=500).sampled_forest[0]
 save_forest([bdss_tree], 'BDSS_tree.nwk')
 ## Adding -CT to the model above
-bdssct_model = CTModel(model=bdss_model, upsilon=0.2, phi=2.5)
+bdssct_model = CTModel(model=bdss_model, upsilon=0.2, X_C=10, X_p=1)
 bdssct_tree = generate([bdssct_model], min_tips=200, max_tips=500, max_notified_contacts=3).sampled_forest[0]
 save_forest([bdssct_tree], 'BDSSCT_tree.nwk')
 ## BDSS-CT(3)-Skyline with two time intervals, using the model above for the first interval
 bdssct_model_2 = CTModel(
     model=BirthDeathWithSuperSpreadingModel(p=0.5, la_nn=0.1, la_ns=0.3, la_sn=1, la_ss=3, psi=0.25),
-    upsilon=0.5, phi=5)
+    upsilon=0.5, X_C=20, X_p=1)
 bdssct_skyline_tree = generate([bdssct_model, bdssct_model_2], skyline_times=[2], min_tips=200, max_tips=500,
                                max_notified_contacts=3).sampled_forest[0]
 save_forest([bdssct_skyline_tree], 'BDSSCTSkyline_tree.nwk')
@@ -558,16 +578,17 @@ save_forest([bdssct_skyline_tree], 'BDSSCTSkyline_tree.nwk')
 ## BDEISS model
 bdeiss_model = BirthDeathExposedInfectiousWithSuperSpreadingModel(p=0.5, mu_n=0.1, mu_s=0.3, la_n=0.5, la_s=1.5,
                                                                   psi=0.25)
+print(bdeiss_model.get_epidemiological_parameters())
 bdeiss_tree = generate([bdeiss_model], min_tips=200, max_tips=500).sampled_forest[0]
 save_forest([bdeiss_tree], 'BDEISS_tree.nwk')
 ## Adding -CT to the model above
-bdeissct_model = CTModel(model=bdeiss_model, upsilon=0.2, phi=2.5)
+bdeissct_model = CTModel(model=bdeiss_model, upsilon=0.2, X_C=10, X_p=1)
 bdeissct_tree = generate([bdeissct_model], min_tips=200, max_tips=500, max_notified_contacts=1).sampled_forest[0]
 save_forest([bdeissct_tree], 'BDEISSCT_tree.nwk')
 ## BDEISS-CT(1)-Skyline with two time intervals, using the model above for the first interval
 bdeissct_model_2 = CTModel(
     model=BirthDeathExposedInfectiousWithSuperSpreadingModel(p=0.2, mu_n=0.1, mu_s=0.3, la_n=0.5, la_s=1.5, psi=0.25),
-    upsilon=0.5, phi=5)
+    upsilon=0.5, X_C=20, X_p=1)
 bdeissct_skyline_tree = generate([bdeissct_model, bdeissct_model_2], skyline_times=[2], min_tips=200,
                                  max_tips=500, max_notified_contacts=1).sampled_forest[0]
 save_forest([bdeissct_skyline_tree], 'BDEISSCTSkyline_tree.nwk')
@@ -580,14 +601,14 @@ mtbd_model = Model(states=['A', 'B'], transition_rates=[[0, 0.6], [0.7, 0]],
 mtbd_tree = generate([mtbd_model], min_tips=200, max_tips=500).sampled_forest[0]
 save_forest([mtbd_tree], 'MTBD_tree.nwk')
 ## Adding -CT to the model above
-mtbdct_model = CTModel(model=mtbd_model, upsilon=0.2, phi=2.5)
+mtbdct_model = CTModel(model=mtbd_model, upsilon=0.2, X_C=10, X_p=1)
 mtbdct_tree = generate([mtbdct_model], min_tips=200, max_tips=500, max_notified_contacts=1).sampled_forest[0]
 save_forest([mtbdct_tree], 'MTBDCT_tree.nwk')
 ## MTBD-CT(1)-Skyline with two time intervals, using the model above for the first interval
 mtbdct_model_2 = CTModel(model=Model(states=['A', 'B'], transition_rates=[[0, 1.6], [1.7, 0]],
                                      transmission_rates=[[1.1, 1.2], [1.3, 1.4]],
                                      removal_rates=[1.05, 1.08], ps=[0.1, 0.6]),
-                         upsilon=0.4, phi=3.5)
+                         upsilon=0.4, X_C=20, X_p=1)
 mtbdct_skyline_tree = generate([mtbdct_model, mtbdct_model_2], skyline_times=[8],
                                min_tips=200, max_tips=500, max_notified_contacts=1).sampled_forest[0]
 save_forest([mtbdct_skyline_tree], 'MTBDCTSkyline_tree.nwk')

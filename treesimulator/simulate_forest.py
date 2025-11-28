@@ -89,17 +89,19 @@ def main():
     # Contact tracing parameters
     parser.add_argument('--upsilon', nargs='*', type=float,
                         help='List of notification probabilities (one per skyline interval). Omit for no contact tracing.')
-    parser.add_argument('--phi', nargs='*', type=float,
-                        help='List of notified removal rates (one per skyline interval). Only used if upsilon is specified.')
+    parser.add_argument('--X_C', nargs='*', type=float,
+                        help='List of removal rate speed-ups (X_C times) after being notified, '
+                             'where X_C = 1 means no speed-up. One value per skyline interval should be given. '
+                             'Only used if upsilon is specified.')
+    parser.add_argument('--X_p', nargs='*', type=float,
+                        help='List of sampling probability increases (X_p times) after being notified '
+                             '(X_p = 1 means no increase, X_p >= 1 / p, '
+                             'where p is the sampling probability of the unnotified individual of the same type,'
+                             'means automatic sampling (with probability 1) upon removal.) '
+                             'One value per skyline interval should be given. '
+                             'Only used if upsilon is specified.')
     parser.add_argument('--max_notified_contacts', required=False, default=1, type=int,
                         help='Maximum notified contacts.')
-    parser.add_argument('--allow_irremovable_states', action='store_true', default=False,
-                        help='If specified and the initial model included "irremovable" states '
-                             '(i.e., whose removal rate was zero, e.g., E in the BDEI model), '
-                             'then even after notification their removal rate will stay zero, '
-                             'and the corresponding individuals will become "removable" (at a rate phi) '
-                             'only once they change the state to a "removable" one '
-                             '(e.g., from E-C to I-C in BDEI-CT).')
 
     parser.add_argument('--avg_recipients', nargs='*', type=float,
                         help='average number of recipients per transmission '
@@ -162,7 +164,7 @@ def main():
 
     is_ct = params.upsilon
     if is_ct:
-        if n_models != len(params.upsilon) or n_models != len(params.phi):
+        if n_models != len(params.upsilon) or n_models != len(params.X_C) or n_models != len(params.X_p):
             raise ValueError("Contact-tracing parameter lists must have the same length "
                              f"as the number of models in the skyline ({n_models})")
 
@@ -181,8 +183,7 @@ def main():
                       removal_rates=removal_rates[:, i], ps=sampling_probabilities[:, i],
                       n_recipients=params.avg_recipients)
         if is_ct:
-            model = CTModel(model=model, upsilon=params.upsilon[i], phi=params.phi[i],
-                            allow_irremovable_states=params.allow_irremovable_states)
+            model = CTModel(model=model, upsilon=params.upsilon[i], X_C=params.X_C[i], X_p=params.X_p[i])
         models.append(model)
         extras = f'\n\tR={model.get_avg_R():g}\n\td={model.get_avg_d():g}' if not is_ct else ''
         logging.info('{}MTBD{}{} model parameters are:\n'
@@ -199,14 +200,15 @@ def main():
                              if n_models > 1 else '',
                              '-MULT' if is_mult else '',
                              '-CT' if is_ct else '',
-                             params.states,
-                             transition_rates[:, :, i],
-                             transmission_rates[:, :, i],
-                             removal_rates[:, i],
-                             sampling_probabilities[:, i],
+                             ', '.join(model.states),
+                             model.transition_rates,
+                             model.transmission_rates,
+                             model.removal_rates,
+                             model.ps,
                              extras,
                              '\n\tavg_recipient_numbers={}'.format(params.avg_recipients) if is_mult else '',
-                             '\n\tphi={}\n\tupsilon={}'.format(params.phi[i], params.upsilon[i]) if is_ct else ''))
+                             '\n\tupsilon={}'.format(model.upsilon) if is_ct else '')
+                     )
 
     epidemic = generate(models, skyline_times=params.skyline_times, T=params.T,
                         min_tips=params.min_tips, max_tips=params.max_tips,

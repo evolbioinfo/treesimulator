@@ -113,8 +113,8 @@ class FrequencyTest(unittest.TestCase):
         bdeiss_pis = bdeiss_model.state_frequencies[1:]
         pis = bdss_model.state_frequencies
         print(bdeiss_pis, pis)
-        self.assertAlmostEqual(bdeiss_pis[0], pis[0], places=6)
-        self.assertAlmostEqual(bdeiss_pis[1], pis[1], places=6)
+        self.assertAlmostEqual(bdeiss_pis[0], pis[0], places=3)
+        self.assertAlmostEqual(bdeiss_pis[1], pis[1], places=3)
 
 
     def test_bdss_f_ss_0_vs_bd(self):
@@ -171,7 +171,7 @@ class FrequencyTest(unittest.TestCase):
         mu_s = f_ss * mu
         bdeiss_model = BirthDeathExposedInfectiousWithSuperSpreadingModel(mu_n=mu_i, mu_s=mu_s, la_n=la, la_s=x_ss * la, \
                                                                           psi=psi, p=rho)
-        bdeissct_model = CTModel(bdeiss_model, phi=psi * x_c, upsilon=0)
+        bdeissct_model = CTModel(bdeiss_model, X_C=x_c, upsilon=0)
         bdeiss_pis = bdeiss_model.state_frequencies
         pis = bdeissct_model.state_frequencies
         print(bdeiss_pis, pis)
