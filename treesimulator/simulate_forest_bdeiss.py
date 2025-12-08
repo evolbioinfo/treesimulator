@@ -70,7 +70,10 @@ def main():
                              'One value per skyline interval should be given. '
                              'Only used if upsilon is specified.')
     parser.add_argument('--max_notified_contacts', required=False, default=1, type=int,
-                        help='Maximum notified contacts')
+                        help='Maximum number of notified (most recent) contacts per index case.')
+    parser.add_argument('--notify_at_removal', action='store_true', default=False,
+                        help="allow for contact notification by any person who just got removed (i.e., non-infectious) "
+                             "instead of only sampled ones (default).")
 
     parser.add_argument('--avg_recipients', nargs=2, default=[1, 1], type=float,
                         help='average number of recipients per transmission '
@@ -142,8 +145,10 @@ def main():
 
     epidemic = generate(models, skyline_times=params.skyline_times, T=params.T,
                         min_tips=params.min_tips, max_tips=params.max_tips,
-                        max_notified_contacts=params.max_notified_contacts,
-                        random_seed=params.seed, return_LTT=params.ltt is not None,
+                        max_notified_contacts=params.max_notified_contacts, notify_at_removal=params.notify_at_removal,
+                        root_state=params.root_state,
+                        random_seed=params.seed,
+                        return_LTT=params.ltt is not None,
                         return_full_forest=params.nwk_full is not None,
                         return_stats=True)
 

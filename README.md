@@ -54,7 +54,8 @@ The MTBD model has the following epidemiological parameters:
 Contact tracing extension was introduced by Zhukova & Gascuel [[_PLOS Comput Biol_ 2025]](https://doi.org/10.1371/journal.pcbi.1012461). 
 Here we present a slightly modified version of it. CT adds three parameters to the initial MTBD model:
 
-* υ -- probability to notify contacts upon sampling
+* υ -- probability to notify contacts upon sampling (default) or becoming non-infectious 
+    (a.k.a. removal, if the option _--notify_at_removal_ is set).
 * X<sub>C</sub> -- notified removal speeed-up: X<sub>C</sub> >> 1. 
 Once notified, the contact's removal rate increases X<sub>C</sub> times. 
 * X<sub>p</sub> -- notified sampling probability speeed-up: X<sub>p</sub> >> 1. 

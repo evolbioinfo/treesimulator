@@ -65,7 +65,7 @@ def get_mean_estimate(observations, is_finished, max_time):
 
 
 def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min_sampled=0, max_sampled=np.inf,
-                                state_feature=STATE, state_frequencies=None, ltt=False, max_notified_contacts=1,
+                                state_frequencies=None, max_notified_contacts=1, notify_at_removal=False,
                                 root_state=None):
     """
     Simulates the epidemic from one infected individual over the given time based on the given model(s).
@@ -84,16 +84,17 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min
     :type max_sampled: int
     :param max_time: time over which we generate a tree, by default infinity
     :type max_time: float
-    :param state_feature: a name of the tree feature which will store node states
     :param state_frequencies: array of equilibrium frequencies of the states of (the first) model
         (to be used to draw the root state). If not given, will be taken from the model (by default all equal).
-    :param ltt: whether to return LTT values as well (default False)
-    :type ltt: bool
     :param max_notified_contacts: maximum notified contacts for -CT models (by default 1, meaning the most recent contact)
     :type max_notified_contacts: int
     :param root_state: State of the root node (at the beginning of the root branch).
         If not specified, the state will be drawn randomly according to equilibrium frequencies.
     :type root_state: str
+    :param notify_at_removal: only applies to models allowing for contact tracing. If True,
+        all the removed individuals will be given an opportunity to notify their contact(s).
+        Otherwise (False, default), only sampled individuals may notify.
+    :type notify_at_removal: bool
     :return: the simulated tree and the time it covers
     :rtype: ete3.Tree
     """
@@ -133,7 +134,7 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min
     id2current_id = {0: 0}
     id2state = {0: root_state}
 
-    target_sampled = np.round(np.random.uniform(low=min_sampled, high=max_sampled, size=1)[0], 0) \
+    target_sampled = int(np.round(np.random.uniform(low=min_sampled, high=max_sampled, size=1)[0], 0)) \
         if max_sampled < np.inf else np.inf
 
     logging.debug('Aiming for {} sampled cases over time {}'
@@ -168,7 +169,7 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min
                                           current_model.removal_rates])
             model_changed = False
 
-        total_infected = infectious_nums.sum()
+        # total_infected = infectious_nums.sum()
         # if num_states > 1:
         #     logging.debug(f'Among {total_infected} infected individuals ' +
         #                   ", ".join(f"{pi_i * 100:.2f}% are in state {s_i}"
@@ -272,45 +273,47 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min
         id2node_time[removed_id] = time
         msg = 'Time {}:\t{} in state {} got removed'.format(time, removed_id, current_model.states[i])
 
-        if np.random.uniform(0, 1, 1)[0] < current_model.ps[i]:
+        # case 3-a: removal and sampling
+        got_sampled = np.random.uniform(0, 1, 1)[0] < current_model.ps[i]
+        if got_sampled:
             sampled_id2state[removed_id] = current_model.states[i]
             sampled_nums[i] += 1
             msg += ' and sampled'
 
-            # contact tracing
-            if isinstance(current_model, CTModel):
-                contact_n = max_notified_contacts
-                # if the max number of notified contacts per person allows and it is not the root
-                while contact_n > 0 and removed_id in id2parent_id:
-                    parent_id = id2parent_id[removed_id]
-                    donor_id = (parent_id[0], parent_id[1] + 1)
-                    contact_ids = donor_id2recipient_id[parent_id] if removed_id == donor_id else [donor_id]
-                    contact_ids = [contact_ids[_]
-                                   for _ in np.random.choice(np.arange(len(contact_ids)), replace=False,
-                                                             size=min(len(contact_ids), contact_n))]
-                    contact_n -= len(contact_ids)
-                    for contact_id in contact_ids:
-                        contact_id = contact_id[0], id2current_id[contact_id[0]]
-                        if removed_id != donor_id:
-                            # means this is the last contact this node has
-                            contact_n = 0
-                        else:
-                            removed_id = parent_id
-                        # If the notifier agrees and the contact is not yet removed, notify them
-                        if (np.random.uniform(0, 1, 1)[0] < current_model.upsilon
-                                and contact_id not in id2node_time):
-                            unnotified_contact_i = id2state[contact_id[0]]
-                            # The ids are organised as follows: s1, s2, ..., sm, s1-n, s2-n, ..., sm-n
-                            # Hence if we have an id >= m then the contact was already notified by someone else
-                            if unnotified_contact_i < num_states // 2:
-                                notified_contact_i = num_states // 2 + unnotified_contact_i
-                                id2state[contact_id[0]] = notified_contact_i
-                                infectious_state2id[unnotified_contact_i].remove(contact_id)
-                                infectious_state2id[notified_contact_i].add(contact_id)
-                                infectious_nums[unnotified_contact_i] -= 1
-                                infectious_nums[notified_contact_i] += 1
-                            msg += ' and notified {} in state {}' \
-                                .format(contact_id, current_model.states[unnotified_contact_i])
+        # case 3-bis: removal and contact tracing
+        if isinstance(current_model, CTModel) and (got_sampled or notify_at_removal):
+            contact_n = max_notified_contacts
+            # if the max number of notified contacts per person allows for it, and it is not the root
+            while contact_n > 0 and removed_id in id2parent_id:
+                parent_id = id2parent_id[removed_id]
+                donor_id = (parent_id[0], parent_id[1] + 1)
+                contact_ids = donor_id2recipient_id[parent_id] if removed_id == donor_id else [donor_id]
+                contact_ids = [contact_ids[_]
+                               for _ in np.random.choice(np.arange(len(contact_ids)), replace=False,
+                                                         size=min(len(contact_ids), contact_n))]
+                contact_n -= len(contact_ids)
+                for contact_id in contact_ids:
+                    contact_id = contact_id[0], id2current_id[contact_id[0]]
+                    if removed_id != donor_id:
+                        # means this is the last contact this node has
+                        contact_n = 0
+                    else:
+                        removed_id = parent_id
+                    # If the notifier agrees and the contact is not yet removed, notify them
+                    if (np.random.uniform(0, 1, 1)[0] < current_model.upsilon
+                            and contact_id not in id2node_time):
+                        unnotified_contact_i = id2state[contact_id[0]]
+                        # The ids are organised as follows: s1, s2, ..., sm, s1-n, s2-n, ..., sm-n
+                        # Hence if we have an id >= m then the contact was already notified by someone else
+                        if unnotified_contact_i < num_states // 2:
+                            notified_contact_i = num_states // 2 + unnotified_contact_i
+                            id2state[contact_id[0]] = notified_contact_i
+                            infectious_state2id[unnotified_contact_i].remove(contact_id)
+                            infectious_state2id[notified_contact_i].add(contact_id)
+                            infectious_nums[unnotified_contact_i] -= 1
+                            infectious_nums[notified_contact_i] += 1
+                        msg += ' and notified {} in state {}' \
+                            .format(contact_id, current_model.states[unnotified_contact_i])
         logging.debug(msg)
 
     if max_time == np.inf:
@@ -460,62 +463,6 @@ def random_pop(elements):
     elements.remove(element)
     return element
 
-
-def generate_forest(models, skyline_times=None, max_time=np.inf, min_tips=1000, keep_nones=False, state_feature=STATE,
-                    state_frequencies=None, ltt=False, max_notified_contacts=1,
-                    root_state=None):
-    total_n_tips = 0
-    forest = []
-    total_trees = 0
-    sampled_trees = 0
-    res_ltt = None
-    total_observed_nums = np.zeros((len(models) if isinstance(models, list) else 1, \
-                                    len((models[0] if isinstance(models, list) else models).states)), dtype=float)
-    total_patient_Res, total_patient_infection_durations, total_patient_removal_mask \
-        = [], [], []
-    while total_n_tips < min_tips:
-        if ltt:
-            tree, cur_ltt, _, observed_nums, \
-                patient_Res, patient_infection_durations, patient_removal_mask = \
-                simulate_epidemic_gillespie(models, skyline_times=skyline_times, max_time=max_time, ltt=True,
-                                            state_feature=state_feature, state_frequencies=state_frequencies,
-                                            max_notified_contacts=max_notified_contacts, root_state=root_state)
-            if res_ltt is None:
-                res_ltt = cur_ltt
-            else:
-                total = 0
-                prev_res, prev_cur = 0, 0
-                for time in sorted(set(cur_ltt.keys()) | set(res_ltt.keys())):
-                    if time in cur_ltt:
-                        total += cur_ltt[time] - prev_cur
-                        prev_cur = cur_ltt[time]
-                    if time in res_ltt:
-                        total += res_ltt[time] - prev_res
-                        prev_res = res_ltt[time]
-                    res_ltt[time] = total
-        else:
-            tree, _, observed_nums, \
-                patient_Res, patient_infection_durations, patient_removal_mask, patient_sampling_mask = \
-                simulate_epidemic_gillespie(models, skyline_times=skyline_times, max_time=max_time, ltt=False,
-                                            state_feature=state_feature, state_frequencies=state_frequencies,
-                                            max_notified_contacts=max_notified_contacts, root_state=root_state)
-        total_observed_nums += observed_nums
-        total_patient_Res.extend(patient_Res)
-        total_patient_infection_durations.extend(patient_infection_durations)
-        total_patient_removal_mask.extend(patient_removal_mask)
-        total_trees += 1
-        if tree:
-            total_n_tips += len(tree)
-            sampled_trees += 1
-        if tree or keep_nones:
-            forest.append(tree)
-
-    if ltt:
-        return forest, res_ltt, total_observed_nums, total_patient_Res, total_patient_infection_durations, total_patient_removal_mask
-    else:
-        return forest, total_observed_nums, total_patient_Res, total_patient_infection_durations, total_patient_removal_mask
-
-
 def merge_LTTs(ltt1, ltt2):
     if ltt1 is None:
         return ltt2
@@ -532,8 +479,12 @@ def merge_LTTs(ltt1, ltt2):
             ltt1[time] = total_count
         return ltt1
 
-def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_frequencies=None, max_notified_contacts=1,
-             root_state=None, random_seed=None,
+def generate(models,
+             min_tips, max_tips,
+             T=np.inf, skyline_times=None,
+             state_frequencies=None, root_state=None,
+             max_notified_contacts=1, notify_at_removal=False,
+             random_seed=None,
              return_sampled_forest=True, return_LTT=False, return_full_forest=False, return_stats=False):
     """
     Simulates a tree (or a forest of trees, if --T is specified) for given MTBD model parameters.
@@ -562,6 +513,10 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
     :type state_frequencies: list(float)
     :param max_notified_contacts: maximum notified contacts for -CT models (by default 1, meaning the most recent contact)
     :type max_notified_contacts: int
+    :param notify_at_removal: only applies to models allowing for contact tracing. If True,
+        all the removed individuals will be given an opportunity to notify their contact(s).
+        Otherwise (False, default), only sampled individuals may notify.
+    :type notify_at_removal: bool
     :param root_state: State of the root node (at the beginning of the root branch).
         If not specified, the state will be drawn randomly according to equilibrium frequencies.
     :type root_state: str
@@ -594,8 +549,9 @@ def generate(models, min_tips, max_tips, T=np.inf, skyline_times=None, state_fre
             id2parent_id, id2node_time, sampled_id2state, max_time, observed_nums = \
                 simulate_epidemic_gillespie(models, skyline_times=skyline_times, max_time=T,
                                             max_sampled=max_tips, min_sampled=min_tips,
-                                            state_frequencies=state_frequencies, ltt=True,
-                                            max_notified_contacts=max_notified_contacts, root_state=root_state)
+                                            state_frequencies=state_frequencies,
+                                            max_notified_contacts=max_notified_contacts,
+                                            notify_at_removal=notify_at_removal, root_state=root_state)
             total_trees += 1
             n_tips = len(sampled_id2state)
             if n_tips:
