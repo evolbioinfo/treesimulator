@@ -1,6 +1,6 @@
 # treesimulator
 
-Simulation of rooted phylogenetic trees under a given Multi-Type Birth–Death (MTBD) model, 
+Simulation of rooted phylogenetic trees and forests of such trees under a given Multi-Type Birth–Death (MTBD) model, 
 with or without contact tracing (CT), 
 and with or without Skyline. 
 
@@ -96,6 +96,7 @@ The same κ value is shared among all the skyline -CT models.
 We pay particular interest to the classical BD model, the BD Exposed-Infectious (BDEI) model, 
 and BD with super-spreading (BDSS), 
 as they are described in [[Voznica _et al._ 2021]](https://www.biorxiv.org/content/10.1101/2021.03.11.435006v1), 
+their mixture BDEISS model,
 and to their -CT(κ) versions.
 
 
@@ -249,6 +250,34 @@ Epidemiological parameters:
 * X<sub>C</sub> -- notified removal speed-up: X<sub>C</sub> >> 1
 * X<sub>p</sub> -- notified sampling probability speed-up: X<sub>p</sub> ≥ 1
 
+## Tree and forest generation
+To generate a tree/forest under a given model one needs to specify the model parameters (see above), 
+and the condition to stop the simulation. 
+The simulation can be stopped when:
+* the tree reaches a given number of sampled tips, specified via options _--min_tips_ and _--max_tips_;
+* the limit on the sampling period duration in reached, specified via option _--T_;
+* a combination of the two conditions above (see below).
+
+The generation starts with one infected individual at time 0. 
+The initial state of this individual is by default drawn randomly according to the equilibrium frequencies of the model states.
+If the model includes the CT component (e.g., BDSS-CT), only untraced (i.e., non-notified) states can be used as the initial state 
+(e.g., I or S but not I<sub>C</sub> nor S<sub>C</sub> for BDSS-CT), 
+and the equilibrium frequencies of the non-CT version of the model (e.g., BDSS) are used. 
+The user can overwrite this behavior by specifying the initial state via an option _--root_state_.
+
+If T=∞ (i.e., _--T_ is not specified and hence there is no constraint on the sampling period duration), 
+the tree generation stops when at least N<sub>min</sub> (specified via _--min_tips_) and at most N<sub>max</sub> (_--max_tips_) tips are sampled. 
+In practice, a random value N ∈ [N<sub>min</sub>, N<sub>max</sub>] is drawn as the target number of sampled tips. The tree is generated till it reaches N sampled tips.
+If the epidemic dies out before reaching N sampled tips, the tree is returned if N<sub>min</sub> sampling target has been reached, 
+otherwise the simulation restarts from scratch. 
+
+If T<∞, each tree generation stops when T is reached. Trees keep being generated and added to the forest 
+till their total sampled tip number reaches at least N<sub>min</sub>. 
+However, if after the last tree addition N<sub>max</sub> sampling target is exceeded, 
+the whole forest generation gets restarted from scratch.
+
+If one needs to generate a single tree over a given time T, _--T_ should be set to T, 
+_--min_tips_ should be set to 1 and _--max_tips_ to its default value (∞).
 
 ## Installation
 

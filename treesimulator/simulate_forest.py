@@ -25,22 +25,41 @@ def main():
 
     # Common parameters
     parser.add_argument('--min_tips', required=True, type=int,
-                        help="desired minimal bound on the total number of simulated leaves. "
-                             "For a tree simulation, "
-                             "if --min_tips and --max_tips are equal, exactly that number of tips will be simulated. "
-                             "If --min_tips is less than --max_tips, "
-                             "a value randomly drawn between one and another will be simulated.")
-    parser.add_argument('--max_tips', required=True, type=int,
-                        help="desired maximal bound on the total number of simulated leaves"
-                             "For a tree simulation, "
-                             "if --min_tips and --max_tips are equal, exactly that number of tips will be simulated. "
-                             "If --min_tips is less than --max_tips, "
-                             "a value randomly drawn between one and another will be simulated.")
+                        help="minimal number of sampled tips. "
+                             "If --T is not specified (i.e., is infinity), "
+                             "and the tree generation produces a tree with less than --min_tips sampled tips,"
+                             "the tree generation gets automatically restarted, "
+                             "till a tree with at least --min_tips sampled tips is obtained. "
+                             "If --T is specified (and is finite), "
+                             "trees keep being generated and added to the forest "
+                             "till their total sampled tip number reaches at least --min_tips tips.")
+    parser.add_argument('--max_tips', required=False, default=np.inf, type=int,
+                        help="maximal number of sampled tips, by default infinity. "
+                             "If --T is not specified (i.e., is infinity), "
+                             "the tree generation stops when at least --min_tips are sampled, "
+                             "and at most --max_tips are sampled. "
+                             "In practice, a random value between --min_tips (inclusive) and --max_tips (inclusive) "
+                             "is drawn as the target number of sampled tips. "
+                             "However, if the epidemic dies out before reaching that number, "
+                             "the tree is returned if --min_tips sampling target has been reached, "
+                             "otherwise the simulation restarts. "
+                             "If --T is specified (and is finite), each tree generation stops when --T is reached. "
+                             "Trees keep being generated and added to the forest "
+                             "till their total sampled tip number reaches at least --min_tips. "
+                             "If after the last tree addition --max_tips sampling target is exceeded, t"
+                             "he whole forest generation gets restarted.")
     parser.add_argument('--T', required=False, default=np.inf, type=float,
-                        help="Total simulation time. If specified, a forest will be simulated instead of one tree. "
-                             "The trees in this forest will be simulated during the given time, "
-                             "till the --min_tips number is reached. If after simulating the last tree, "
-                             "the forest exceeds the --max_tips number, the process will be restarted.")
+                        help="time over which to generate a tree/forest, by default infinity. "
+                             "If --T is not specified (i.e., is infinity), "
+                             "only one tree is generated "
+                             "and its size will be within --min_tips (inclusive) and --max_tips (inclusive) sampled tips. "
+                             "If --T is specified (and is finite), each tree generation stops when --T is reached. "
+                             "Trees keep being generated and added to the forest "
+                             "till their total sampled tip number reaches at least --min_tips. "
+                             "If after the last tree addition --max_tips is exceeded, "
+                             "the whole forest generation gets restarted. "
+                             "Hence, if one needs to generate a single tree over a given time --T, "
+                             "--min_tips should be set to 1 and --max_tips to infinity.")
 
     # States parameter
     parser.add_argument('--states', required=True, nargs='+', type=str, help="model states")

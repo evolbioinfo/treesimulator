@@ -64,7 +64,7 @@ def get_mean_estimate(observations, is_finished, max_time):
     return restricted_mean_survival_time(kmf, max_time)
 
 
-def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min_sampled=0, max_sampled=np.inf,
+def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, max_sampled=np.inf,
                                 state_frequencies=None, max_notified_contacts=1, notify_at_removal=False,
                                 root_state=None):
     """
@@ -78,11 +78,13 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min
         Must be sorted in ascending order and contain one less elements than the number of models.
         The first model always starts at time 0.
     :type skyline_times: list(float)
-    :param min_sampled: minimal number of sampled nodes (when reached, the simulation could stop), by default 0
-    type min_sampled: int
-    :param max_sampled: maximal number of sampled nodes (when reached, the simulation stops), by default infinity
+    :param max_sampled: maximal number of sampled tips, by default infinity.
+        The tree generation starts with one infected individual at time 0,
+        and stops when either max_sampled tips or max_time is reached.
     :type max_sampled: int
-    :param max_time: time over which we generate a tree, by default infinity
+    :param max_time: maximum length of the sampling period over which to generate a tree, by default infinity.
+        The tree generation starts with one infected individual at time 0,
+        and stops when either max_sampled tips or max_time is reached.
     :type max_time: float
     :param state_frequencies: array of equilibrium frequencies of the states of (the first) model
         (to be used to draw the root state). If not given, will be taken from the model (by default all equal).
@@ -134,11 +136,11 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min
     id2current_id = {0: 0}
     id2state = {0: root_state}
 
-    target_sampled = int(np.round(np.random.uniform(low=min_sampled, high=max_sampled, size=1)[0], 0)) \
-        if max_sampled < np.inf else np.inf
 
-    logging.debug('Aiming for {} sampled cases over time {}'
-                  .format(target_sampled if target_sampled < np.inf else 'any number of', max_time))
+    if max_sampled >= np.inf and max_time >= np.inf:
+            raise ValueError('A limit on tree generation must be specified: it can be either the maximum number of sampled tips (max_sampled) '
+                             'or the maximum length of the sampling period (max_time). '
+                             'If both are specified, then the generation will stop when the first of them is reached.')
 
     num_states_squared = np.power(num_states, 2)
     # transition rates (n^2) + transmission rates (n^2) + removal rates (n)
@@ -155,7 +157,7 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min
     model_changed = True
 
     observed_nums = np.zeros((len(models) if use_skyline else 1, num_states), dtype=float)
-    while infectious_nums.sum() and sampled_nums.sum() < target_sampled and time < max_time:
+    while infectious_nums.sum() and sampled_nums.sum() < max_sampled and time < max_time:
         # Only update model-dependent parameters if the model has changed
         if model_changed:
             # Update model-dependent parameters
@@ -316,10 +318,12 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, min
                             .format(contact_id, current_model.states[unnotified_contact_i])
         logging.debug(msg)
 
-    if max_time == np.inf:
-        max_time = time
+    # If the epidemic went extinct, it means we could reach the max_time by simply waiting
+    if max_time < np.inf and infectious_nums.sum() == 0:
+        logging.debug(f'The epidemic went extinct at time {time}.')
+        time = max_time
 
-    return id2parent_id, id2node_time, sampled_id2state, max_time, observed_nums
+    return id2parent_id, id2node_time, sampled_id2state, time, observed_nums
 
 
 
@@ -498,15 +502,30 @@ def generate(models,
     :param skyline_times: list of time points where model parameters change for Skyline models
         (length should be len(models)-1)
     :type skyline_times: list(float)
-    :param min_tips: desired minimal bound on the total number of simulated leaves
-    :type min_tips: int
-    :param max_tips: desired maximal bound on the total number of simulated leaves
+    :param min_tips: minimal number of sampled tips, by default 0.
+        If T is not specified (i.e., is infinity), and the tree generation produces a tree with less than min_tips sampled tips,
+        the tree generation gets automatically restarted, till a tree with at least min_tips sampled tips is obtained.
+        If T is specified (and is finite), trees keep being generated and added to the forest
+        till their total sampled tip number reaches at least min_tips tips.
+    type min_tips: int
+    :param max_tips: maximal number of sampled tips, by default infinity.
+        If T is not specified (i.e., is infinity), the tree generation stops when at least min_tips are sampled,
+        and at most max_tips are sampled. In practice, a random value between min_tips (inclusive) and max_tips (inclusive)
+        is drawn as the target number of sampled tips. However, if the epidemic dies out before reaching that number,
+        the tree is returned if min_tips sampling target has been reached, otherwise the simulation restarts.
+        If T is specified (and is finite), each tree generation stops when T is reached.
+        Trees keep being generated and added to the forest
+        till their total sampled tip number reaches at least min_tips.
+        If after the last tree addition max_tips sampling target is exceeded, the whole forest generation gets restarted.
     :type max_tips: int
-    :param T: total simulation time.
-        If specified, a forest will be simulated instead of one tree.
-        The trees in this forest will be simulated during the given time,
-        till the --min_tips number is reached.
-        If after simulating the last tree, the forest exceeds the --max_tips number, the process will be restarted.
+    :param T: time over which to generate a tree/forest, by default infinity.
+        If T is not specified (i.e., is infinity), only one tree is generated and its size will be within
+        min_tips (inclusive) and max_tips (inclusive) sampled tips.
+        If T is specified (and is finite), each tree generation stops when T is reached.
+        Trees keep being generated and added to the forest
+        till their total sampled tip number reaches at least min_tips.
+        If after the last tree addition max_tips is exceeded, the whole forest generation gets restarted.
+        Hence, if one needs to generate a single tree over a given time T, min_tips should be set to 1 and max_tips to infinity.
     :type T: float
     :param state_frequencies: array of model state frequencies,
         to be used to draw the root states. If not given, will be taken from the model (by default all equal).
@@ -545,10 +564,15 @@ def generate(models,
         total_patient_infection_durations, total_patient_removal_mask = [], []
         ltt = None
 
+        # If we are generating a single tree, randomly draw the target number of tips,
+        # otherwise set it to max_tips
+        target_tips = np.random.randint(min_tips, max_tips + 1) if T >= np.inf and max_tips < np.inf else max_tips
+
+        max_time = T
         while total_n_tips < min_tips:
             id2parent_id, id2node_time, sampled_id2state, max_time, observed_nums = \
                 simulate_epidemic_gillespie(models, skyline_times=skyline_times, max_time=T,
-                                            max_sampled=max_tips, min_sampled=min_tips,
+                                            max_sampled=target_tips - total_n_tips,
                                             state_frequencies=state_frequencies,
                                             max_notified_contacts=max_notified_contacts,
                                             notify_at_removal=notify_at_removal, root_state=root_state)
@@ -557,8 +581,14 @@ def generate(models,
             if n_tips:
                 total_n_tips += n_tips
                 sampled_trees += 1
-                # If it is a single tree generation, restart as there is a tip shortage
+                # If it is a single tree generation, restart if there is a tip shortage
                 if T >= np.inf and total_n_tips < min_tips:
+                    break
+                # If we have a constraint on maximum time, but the actual time is less,
+                # it means we have reached too many tips before and need to restart the process
+                if max_time < T < np.inf:
+                    # in order to have too many tips
+                    total_n_tips += 1
                     break
                 if return_sampled_forest:
                     forest.append(reconstruct_tree(id2parent_id, id2node_time, sampled_id2state, max_time,
