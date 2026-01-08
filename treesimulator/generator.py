@@ -484,7 +484,7 @@ def merge_LTTs(ltt1, ltt2):
         return ltt1
 
 def generate(models,
-             min_tips, max_tips,
+             min_tips, max_tips=np.inf,
              T=np.inf, skyline_times=None,
              state_frequencies=None, root_state=None,
              max_notified_contacts=1, notify_at_removal=False,
