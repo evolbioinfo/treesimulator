@@ -5,17 +5,12 @@ from collections import Counter, namedtuple
 import numpy as np
 import scipy
 from ete3 import TreeNode
-
 from lifelines import KaplanMeierFitter
 from lifelines.utils import restricted_mean_survival_time
 
-from treesimulator import STATE, DIST_TO_START, TIME_TILL_NOW
+from treesimulator import STATE, TIME
 from treesimulator.mtbd_models import CTModel
 
-TRANSITION = 0
-TRANSMISSION = 1
-REMOVAL = 2
-EVENT_TYPES = np.array([TRANSITION, TRANSMISSION, REMOVAL])
 
 Epidemic = namedtuple('Epidemic',
                       ['sampled_forest', 'full_forest', 'LTT',
@@ -97,8 +92,18 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, max
         all the removed individuals will be given an opportunity to notify their contact(s).
         Otherwise (False, default), only sampled individuals may notify.
     :type notify_at_removal: bool
-    :return: the simulated tree and the time it covers
-    :rtype: ete3.Tree
+
+
+    :return: a tuple(id2parent_id, id2node_time, sampled_ids, id2state, time, observed_nums), which are:
+        correspondingly
+            (1) a mapping of node ids to their parent node ids,
+                where each node id is a tuple (individual id, number of infections caused by that individual by the time it reaches the node in question),
+            (2) a mapping of node ids to their times,
+            (3) a list of sampled node ids, a mapping of individual ids to their states,
+            (4) the time at which the simulation ended,
+            (5) an array of shape (n_models, n_states) with the observed number of infected individuals
+                in each state at the end of each model period.
+    :rtype: tuple(dict(tuple(int, int): tuple(int, int)), dict(tuple(int, int): float), list(tuple(int, int)), dict(int: str), float, np.ndarray)
     """
     # Check if we're using skyline models (list with more than one model)
     use_skyline = isinstance(models, list) and len(models) > 1
@@ -112,13 +117,12 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, max
 
 
     num_states = len(current_model.states)
-    if state_frequencies is None:
-        state_frequencies = current_model.state_frequencies
     state_indices = np.arange(num_states)
     root_states = state_indices[current_model.states == root_state]
     if len(root_states) > 0:
         root_state = root_states[0]
     else:
+        state_frequencies = current_model.state_frequencies if state_frequencies is None else state_frequencies
         root_state = np.random.choice(state_indices, size=1, p=state_frequencies)[0]
 
     time = 0
@@ -131,8 +135,11 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, max
     infectious_state2id[root_state].add(cur_id)
     id2node_time = {}
     id2parent_id = {}
-    sampled_id2state = {}
+    sampled_ids = []
+
+    # The below mapping will only be filled in and used for CT models
     donor_id2recipient_id = {}
+
     id2current_id = {0: 0}
     id2state = {0: root_state}
 
@@ -260,7 +267,8 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, max
                 infectious_state2id[j].add(cur_id)
                 id2parent_id[cur_id] = parent_id
                 recipient_ids.append(cur_id)
-            donor_id2recipient_id[parent_id] = recipient_ids
+            if isinstance(current_model, CTModel):
+                donor_id2recipient_id[parent_id] = recipient_ids
             logging.debug('Time {}:\t{} in state {} transmitted to {} in state{} {}'
                           .format(time, parent_id, current_model.states[i], ', '.join(str(_) for _ in recipient_ids),
                                   's' if len(recipient_ids) > 1 else '',
@@ -278,7 +286,7 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, max
         # case 3-a: removal and sampling
         got_sampled = np.random.uniform(0, 1, 1)[0] < current_model.ps[i]
         if got_sampled:
-            sampled_id2state[removed_id] = current_model.states[i]
+            sampled_ids.append(removed_id)
             sampled_nums[i] += 1
             msg += ' and sampled'
 
@@ -323,7 +331,7 @@ def simulate_epidemic_gillespie(models, skyline_times=None, max_time=np.inf, max
         logging.debug(f'The epidemic went extinct at time {time}.')
         time = max_time
 
-    return id2parent_id, id2node_time, sampled_id2state, time, observed_nums
+    return id2parent_id, id2node_time, sampled_ids, id2state, time, observed_nums
 
 
 
@@ -344,20 +352,28 @@ def check_skyline_times(skyline_times, n_models):
         raise ValueError(f"The first model change time must be greater than zero, got {skyline_times[0]} instead.")
 
 
-def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_feature=STATE):
-    if not sampled_id2state:
+def name_forest(forest, tips_only=True):
+    i = 0
+    for tree in forest:
+        iterator = tree if tips_only else tree.traverse()
+        for node in iterator:
+            node.name = f'{i}'
+            i += 1
+
+def reconstruct_tree(id2parent, id2time, sampled_ids, id2state, max_time, state_feature=STATE):
+    if not sampled_ids:
         return None
 
     root = None
     id2node = {}
-    for node_id, state in sampled_id2state.items():
+    for node_id in sampled_ids:
+        state = id2state[node_id[0]]
         time = id2time[node_id]
         # if there is PN it could be
         # that we decided to stop at an earlier time when the unsampled contact proportion was lower
         if time > max_time:
             continue
         node = TreeNode(dist=time - (0 if node_id not in id2parent else id2time[id2parent[node_id]]), name=node_id[0])
-        node.add_feature(DIST_TO_START, time)
         node.add_feature(state_feature, state)
         id2node[node_id] = node
         while node is not None and node_id in id2parent:
@@ -367,7 +383,6 @@ def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_featu
                 break
             parent_time = id2time[parent_id]
             parent = TreeNode(dist=parent_time - (0 if parent_id not in id2parent else id2time[id2parent[parent_id]]))
-            parent.add_feature(DIST_TO_START, parent_time)
             id2node[parent_id] = parent
             parent.add_child(node)
             node, node_id = parent, parent_id
@@ -385,13 +400,12 @@ def reconstruct_tree(id2parent, id2time, sampled_id2state, max_time, state_featu
             else:
                 root = child
                 child.up = None
-    # annotate time till now
-    for node in root.traverse('postorder'):
-        node.add_feature(TIME_TILL_NOW, max_time - getattr(node, DIST_TO_START))
     return root
 
-def reconstruct_full_tree(id2parent, id2time, sampled_id2state, max_time):
+def reconstruct_full_tree(id2parent, id2time, sampled_ids, id2state, max_time):
     id2node = {}
+    sampled_ids = set(sampled_ids)
+    parent_ids = set(id2parent.values())
 
     def get_node(id):
         if id not in id2node:
@@ -399,10 +413,11 @@ def reconstruct_full_tree(id2parent, id2time, sampled_id2state, max_time):
             parent_time = id2time[pid] if pid in id2time else 0
             node_time = id2time[id] if id in id2time else max_time
             node_dist = node_time - parent_time
-            node = TreeNode(dist=node_dist, name='-'.join(str(_) for _ in id))
-            node.add_feature(DIST_TO_START, node_time)
-            if id in sampled_id2state:
+            node = TreeNode(dist=node_dist)
+            if id in sampled_ids:
                 node.add_feature('sampled', 'yes')
+            if id not in parent_ids:
+                node.add_feature(STATE, id2state[id[0]])
             if pid is not None:
                 parent = get_node(pid)
                 parent.add_child(node, dist=node_dist)
@@ -413,7 +428,8 @@ def reconstruct_full_tree(id2parent, id2time, sampled_id2state, max_time):
         get_node(id)
 
     root = get_node((0, 0))
-    # annotate time till now
+    name_forest([root])
+
     for node in root.traverse('postorder'):
         if node.is_leaf():
             node.add_feature('sampled', getattr(node, 'sampled', 'no'))
@@ -421,7 +437,6 @@ def reconstruct_full_tree(id2parent, id2time, sampled_id2state, max_time):
         else:
             node.add_feature('visible', 'yes' if any(getattr(child, 'visible') == 'yes' for child in node.children) else 'no')
             node.add_feature('sampled', 'yes' if sum(getattr(child, 'visible') == 'yes' for child in node.children) > 1 else 'no')
-        node.add_feature(TIME_TILL_NOW, max_time - getattr(node, DIST_TO_START))
     return root
 
 
@@ -441,15 +456,16 @@ def reconstruct_ltt(id2parent_id, id2time):
     return time2num
 
 
-def observed_ltt(forest, T):
+def observed_ltt(forest):
+    annotate_forest_with_time(forest)
     time2num = Counter()
-    time2num[0] = len(forest)
     for tree in forest:
+        time2num[getattr(tree, TIME) - tree.dist] += 1
         for n in tree.traverse():
             if n.is_leaf():
-                time2num[T - getattr(n, TIME_TILL_NOW)] -= 1
+                time2num[getattr(tree, TIME)] -= 1
             else:
-                time2num[T - getattr(n, TIME_TILL_NOW)] += 1
+                time2num[getattr(tree, TIME)] += len(n.children) - 1
     total = 0
     for time in sorted(time2num.keys()):
         total += time2num[time]
@@ -457,15 +473,48 @@ def observed_ltt(forest, T):
     return time2num
 
 
+
+def annotate_forest_with_time(forest, start_times=None):
+    if start_times:
+        if len(start_times) < len(forest):
+            raise ValueError(f'{len(start_times)} start times are specified but the forest contains {len(forest)} trees. '
+                             f'Either specify as many start times as forest trees or set start times to None '
+                             f'(to put all the tree start times at 0)')
+    else:
+        start_times = [0] * len(forest)
+
+    for tree, start_time in zip(forest, start_times):
+        if not hasattr(tree, TIME):
+            annotate_tree_with_time(tree, start_time)
+
+
+def annotate_tree_with_time(tree, start_time=0):
+    for n in tree.traverse('preorder'):
+        if not hasattr(n, TIME):
+            p_time = start_time if n.is_root() else getattr(n.up, TIME)
+            n.add_feature(TIME, p_time + n.dist)
+    return tree
+
 def random_pop(elements):
     """
-    Removes a random element from a list and returns it.
-    :param elements: list of elements
+    Removes a random element from a set and returns it.
+    :param elements: set of elements
     :return: the selected element
     """
-    element = random.sample(list(elements), 1)[0]
-    elements.remove(element)
-    return element
+    n_elements = len(elements)
+    if n_elements < 1024:
+        element = random.sample(list(elements), 1)[0]
+        elements.remove(element)
+        return element
+    else:
+        # save memory for large sets by avoiding conversion to list
+        # 1. Pick a random index
+        rand_index = random.randrange(n_elements)
+        for i, element in enumerate(elements):
+            if i == rand_index:
+                # 3. Once found, remove and return it
+                elements.remove(element)
+                return element
 
 def merge_LTTs(ltt1, ltt2):
     if ltt1 is None:
@@ -570,14 +619,14 @@ def generate(models,
 
         max_time = T
         while total_n_tips < min_tips:
-            id2parent_id, id2node_time, sampled_id2state, max_time, observed_nums = \
+            id2parent_id, id2node_time, sampled_ids, id2state, max_time, observed_nums = \
                 simulate_epidemic_gillespie(models, skyline_times=skyline_times, max_time=T,
                                             max_sampled=target_tips - total_n_tips,
                                             state_frequencies=state_frequencies,
                                             max_notified_contacts=max_notified_contacts,
                                             notify_at_removal=notify_at_removal, root_state=root_state)
             total_trees += 1
-            n_tips = len(sampled_id2state)
+            n_tips = len(sampled_ids)
             if n_tips:
                 total_n_tips += n_tips
                 sampled_trees += 1
@@ -591,10 +640,11 @@ def generate(models,
                     total_n_tips += 1
                     break
                 if return_sampled_forest:
-                    forest.append(reconstruct_tree(id2parent_id, id2node_time, sampled_id2state, max_time,
+                    forest.append(reconstruct_tree(id2parent_id, id2node_time, sampled_ids, id2state, max_time,
                                                    state_feature=STATE))
             if return_full_forest:
-                forest_full.append(reconstruct_full_tree(id2parent_id, id2node_time, sampled_id2state, max_time))
+                forest_full.append(reconstruct_full_tree(id2parent_id, id2node_time, sampled_ids, id2state, max_time,
+                                                   state_feature=STATE))
 
             if return_LTT:
                 ltt = merge_LTTs(ltt, reconstruct_ltt(id2parent_id, id2node_time))

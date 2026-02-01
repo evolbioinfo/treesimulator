@@ -179,7 +179,7 @@ def main():
     if params.log:
         save_log(params.log, models, params.skyline_times, epidemic)
     if params.ltt:
-        save_ltt(epidemic.LTT, observed_ltt(epidemic.sampled_forest, epidemic.T), params.ltt)
+        save_ltt(epidemic.LTT, observed_ltt(epidemic.sampled_forest), params.ltt)
 
 
 if '__main__' == __name__:

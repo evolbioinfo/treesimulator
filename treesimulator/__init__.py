@@ -3,8 +3,7 @@ import os
 from treesimulator.mtbd_models import CTModel
 
 STATE = 'state'
-DIST_TO_START = 'D'
-TIME_TILL_NOW = 'T'
+TIME = 'time'
 
 
 def save_forest(forest, nwk, state_feature=STATE, format=5):
