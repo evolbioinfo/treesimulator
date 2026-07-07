@@ -16,7 +16,7 @@ Anna Zhukova, Olivier Gascuel (2025) Accounting for contact tracing in epidemiol
 [![Docker pulls](https://img.shields.io/docker/pulls/evolbioinfo/treesimulator)](https://hub.docker.com/r/evolbioinfo/treesimulator/tags)
 
 ## MTBD
-The MTBD models were introduced by Stadler & Bonhoeffer [[_Philos. Trans. R. Soc. B_ 2013]](https://royalsocietypublishing.org/doi/10.1098/rstb.2012.0198).
+The MTBD models were introduced by Stadler & Bonhoeffer [[_Philos. Trans. R. Soc. B_ 2013]](https://royalsocietypublishing.org/doi/10.1098/rstb.2012.0198) and extended with migration by Kühnert __et al.__[[MBE 2016]](https://doi.org/10.1093/molbev/msw064).
 
 An MTBD model with m states has 
 
